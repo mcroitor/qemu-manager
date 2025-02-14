@@ -33,7 +33,7 @@ class image
         self::CONVERT,
         self::DD,
         self::INFO,
-        seld::MAP,
+        self::MAP,
         self::MEASURE,
         self::SNAPSHOT,
         self::REBASE,
@@ -54,7 +54,7 @@ class image
     public static function list(array $args): string
     {
         $result = [];
-        $command = "dir /b /a:-d " . \config::images_dir;
+        $command = "ls -l " . \config::images_dir . " | grep -i '\\.img$'";
 
         exec($command, $result);
 
@@ -63,6 +63,8 @@ class image
             "image-state" => self::state(),
             "image-content" => implode("<br />", $result)
         ]);
+        
+        \config::$logger->info(json_encode($result));
         return $tpl->value();
     }
 

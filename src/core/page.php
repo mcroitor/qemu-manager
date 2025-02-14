@@ -43,6 +43,7 @@ class page
     public function html(): string {
         $this->fill_data["menu"] = $this->build_menu();
         $this->fill_data["content"] = $this->content;
+
         return $this->template->fill($this->fill_data)->value();
     }
 
