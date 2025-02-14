@@ -42,6 +42,18 @@ class image
     public const MODULE_PATH = __DIR__;
     public const TEMPLATE_PATH = self::MODULE_PATH . \config::sep . "templates";
 
+    private static function execute_command(string $command): array
+    {
+        $output = [];
+        \config::$logger->info("executing command: {$command}");
+        try {
+            exec($command, $output);
+        } catch (\Throwable $exception) {
+            return ["error: {$exception->GetMessage()}"];
+        }
+        return $output;
+    }
+
     #[route("image/manage")]
     public static function manage(array $args): string
     {
@@ -53,15 +65,24 @@ class image
     #[route("image/list")]
     public static function list(array $args): string
     {
-        $result = [];
         $command = "ls -l " . \config::images_dir . " | grep -i '\\.img$'";
 
-        exec($command, $result);
+        $result = self::execute_command($command);
+        if (empty($result)) {
+            $result[] = "No images found";
+        }
+        $html = "<ul>";
+        foreach ($result as $line) {
+            $chunks = explode(" ", $line);
+            $image_name = end($chunks);
+            $html .= "<li><a href='?q=image/info/{$image_name}'>{$image_name}</a></li>";
+        }
+        $html .= "</ul>";
 
         $tpl = template::load(self::TEMPLATE_PATH . \config::sep . "image_manager.tpl.php", template::comment_modifiers);
         $tpl = $tpl->fill([
             "image-state" => self::state(),
-            "image-content" => implode("<br />", $result)
+            "image-content" => $html,
         ]);
         
         \config::$logger->info(json_encode($result));
@@ -71,23 +92,50 @@ class image
     #[route("image/create")]
     public static function create(array $args): string
     {
-        return "";
+        if(empty($_POST)) {
+            return template::load(self::TEMPLATE_PATH . \config::sep . "image_create.tpl.php", template::comment_modifiers)->value();
+        }
+        $image_name = filter_input(INPUT_POST, "image-name", FILTER_SANITIZE_SPECIAL_CHARS);
+        $image_size = filter_input(INPUT_POST, "image-size", FILTER_SANITIZE_NUMBER_INT);
+        $image_format = filter_input(INPUT_POST, "image-format", FILTER_SANITIZE_SPECIAL_CHARS);
+
+        if (empty($image_name) || empty($image_size) || empty($image_format)) {
+            return "error: missing required fields";
+        }
+
+        $command = self::QEMU_IMG . " create -f {$image_format} " . \config::images_dir . \config::sep . "{$image_name}.img {$image_size}M";
+        $output = self::execute_command($command);
+        $out = implode("<br />", $output);
+        return $out;
     }
 
     #[route("image/info")]
     public static function info(array $args): string
     {
-        return "";
+        if(empty($args)) {
+            return "error: missing image name";
+        }
+        $image_name = filter_var($args[0], FILTER_SANITIZE_SPECIAL_CHARS);
+        if (empty($image_name)) {
+            return "error: invalid image name";
+        }
+
+        $command = self::QEMU_IMG . " info " . \config::images_dir . \config::sep . "{$image_name}";
+        $output = self::execute_command($command);
+        if(empty($output)) {
+            return "error: no output";
+        }
+        return "<pre><code>" . implode("\n", $output) . "</code></pre>";
     }
 
     public static function state(): string
     {
-        $state = [];
-        try {
-            exec(self::QEMU_IMG . " --version", $state);
-        } catch (\Exception $exception) {
-            return "error: {$exception->GetMessage()}";
+        $command = self::QEMU_IMG . " --version";
+
+        $result = self::execute_command($command);
+        if (empty($result)) {
+            return "error: no output";
         }
-        return isset($state[0]) ? $state[0] : "unknown error";
+        return $result[0] ?? "unknown error";
     }
 }
