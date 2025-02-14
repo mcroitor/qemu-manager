@@ -1,0 +1,9 @@
+.navbar {
+    margin-bottom: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.navbar a.button {
+    margin-left: 1px;
+    margin-right: 1px;
+}
