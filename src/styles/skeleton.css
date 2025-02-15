@@ -112,6 +112,17 @@
 
 }
 
+@media (min-width: 1200px) {
+  .container {
+    width: 100%;
+    max-width: 1160px; }
+}
+
+@media (min-width: 1400px) {
+  .container {
+    width: 100%;
+    max-width: 1360px; }
+}
 
 /* Base Styles
 –––––––––––––––––––––––––––––––––––––––––––––––––– */

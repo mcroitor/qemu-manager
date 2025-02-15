@@ -38,6 +38,7 @@ class config {
         "mc/route",
         "mc/router",
         "mc/template",
+        "mc/util",
         "page",
     ];
 

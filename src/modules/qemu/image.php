@@ -25,19 +25,20 @@ class image
     public const RESIZE = "resize";
 
     private const COMMAND = [
-        self::AMEND,
-        self::BITMAP,
-        self::CHECK,
-        self::COMMIT,
-        self::COMPARE,
-        self::CONVERT,
-        self::DD,
+//        self::AMEND,
+//        self::BITMAP,
+//        self::CHECK,
+//        self::COMMIT,
+//        self::COMPARE,
+//        self::CONVERT,
+        self::CREATE,
+//        self::DD,
         self::INFO,
-        self::MAP,
-        self::MEASURE,
-        self::SNAPSHOT,
-        self::REBASE,
-        self::RESIZE,
+//        self::MAP,
+//        self::MEASURE,
+//        self::SNAPSHOT,
+//        self::REBASE,
+//        self::RESIZE,
     ];
     public const MODULE_PATH = __DIR__;
     public const TEMPLATE_PATH = self::MODULE_PATH . \config::sep . "templates";
@@ -45,11 +46,15 @@ class image
     private static function execute_command(string $command): array
     {
         $output = [];
+        $result_code = 0;
         \config::$logger->info("executing command: {$command}");
         try {
-            exec($command, $output);
+            exec($command, $output, $result_code);
         } catch (\Throwable $exception) {
             return ["error: {$exception->GetMessage()}"];
+        }
+        if ($result_code !== 0) {
+            return ["error: command failed with code {$result_code}"];
         }
         return $output;
     }
@@ -57,8 +62,24 @@ class image
     #[route("image/manage")]
     public static function manage(array $args): string
     {
+        $command = "list";
+        if(!empty($args) && in_array($args[0], self::COMMAND)) {
+            $command = $args[0];
+        }
+
+        // remove the first element from the array
+        array_shift($args);
+        // populate result
+        $result = "";
+        if (method_exists(self::class, $command)) {
+            $result = self::$command($args);
+        }
+            
         return template::load(self::TEMPLATE_PATH . \config::sep . "image_manager.tpl.php", template::comment_modifiers)
-            ->fill(["image-state" => self::state()])
+            ->fill([
+                "image-state" => self::state(),
+                "image-content" => $result,
+                ])
             ->value();
     }
 
@@ -71,22 +92,30 @@ class image
         if (empty($result)) {
             $result[] = "No images found";
         }
-        $html = "<ul>";
+        $html = "";
         foreach ($result as $line) {
-            $chunks = explode(" ", $line);
-            $image_name = end($chunks);
-            $html .= "<li><a href='?q=image/info/{$image_name}'>{$image_name}</a></li>";
+            list(
+                $file_rights,
+                $skip,
+                $owner,
+                $group,
+                $file_size,
+                $file_month,
+                $file_day,
+                $file_time,
+                $image_name
+            ) = explode(" ", $line);
+            // convert file size to human readable format in bytes, kb, mb, etc
+            $file_size = \mc\util::size_bytes_to_readable($file_size);
+            $html .= "<tr><td><a href='?q=image/manage/info/{$image_name}'>{$image_name}</a></td><td>{$file_size}</td><td>qcow2</td></tr>";
+            //"<li><a href='?q=image/manage/info/{$image_name}'>{$image_name}</a></li>";
         }
-        $html .= "</ul>";
 
-        $tpl = template::load(self::TEMPLATE_PATH . \config::sep . "image_manager.tpl.php", template::comment_modifiers);
-        $tpl = $tpl->fill([
-            "image-state" => self::state(),
-            "image-content" => $html,
-        ]);
-        
-        \config::$logger->info(json_encode($result));
-        return $tpl->value();
+        return template::load(self::TEMPLATE_PATH . \config::sep . "image_list.tpl.php", template::comment_modifiers)
+            ->fill([
+                "image-list-info" => $html,
+            ])
+            ->value();
     }
 
     #[route("image/create")]

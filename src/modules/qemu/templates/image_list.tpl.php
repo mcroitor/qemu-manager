@@ -1,5 +1,5 @@
 <div id="image-list">
-    <table class="u-full-width">
+    <table class="u-full-width data">
         <thead>
             <tr>
                 <th>filename</th>
