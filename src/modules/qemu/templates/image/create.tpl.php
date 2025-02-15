@@ -1,6 +1,6 @@
 <div id="image-create">
     <h2>Create drive image</h2>
-    <form action="<!-- www -->/?q=image/create" method="post">
+    <form action="<!-- www -->/?q=image/manage/create" method="post">
         <label for="image-name">Image name:</label>
         <input type="text" id="image-name" name="image-name" required>
         <label for="image-size">Image size (MB):</label>
