@@ -3,8 +3,7 @@
         <!-- image-content -->
     </div>
     <div class="actions three columns">
-        <a href="<!-- www -->/?q=image/manage" class="button u-full-width">List Images</a>
-        <a href="<!-- www -->/?q=image/manage/create" class="button u-full-width">Create Image</a>
+        <!-- menu-list -->
     </div>
 </div>
 <div class="row">

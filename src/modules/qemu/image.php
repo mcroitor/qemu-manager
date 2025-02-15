@@ -4,11 +4,11 @@ namespace qemu;
 
 use \mc\route;
 use \mc\template;
+use \mc\util;
 
 class image
 {
     private const QEMU_IMG = "qemu-img";
-
     public const AMEND = "amend";
     public const BITMAP = "bitmap";
     public const CHECK = "check";
@@ -27,7 +27,7 @@ class image
     private const COMMAND = [
 //        self::AMEND,
 //        self::BITMAP,
-//        self::CHECK,
+        self::CHECK,
 //        self::COMMIT,
 //        self::COMPARE,
 //        self::CONVERT,
@@ -42,6 +42,25 @@ class image
     ];
     public const MODULE_PATH = __DIR__;
     public const TEMPLATE_PATH = self::MODULE_PATH . \config::sep . "templates";
+
+    private static $menu = [
+        "list" => "List Images",
+        "create" => "Create Image",
+    ];
+
+    private static function generate_menu(array $menu): string
+    {
+        $html = "";
+        foreach ($menu as $key => $value) {
+            $html .= template::load(util::sausage("image.menu-item", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                ->fill([
+                    "menu-link" => \config::www . "/?q=image/manage/{$key}",
+                    "menu-name" => $value,
+                ])
+                ->value();
+        }
+        return $html;
+    }
 
     private static function execute_command(string $command): array
     {
@@ -75,10 +94,11 @@ class image
             $result = self::$command($args);
         }
             
-        return template::load(self::TEMPLATE_PATH . \config::sep . "image_manager.tpl.php", template::comment_modifiers)
+        return template::load(util::sausage("image.manager", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
             ->fill([
                 "image-state" => self::state(),
                 "image-content" => $result,
+                "menu-list" => self::generate_menu(self::$menu),
                 ])
             ->value();
     }
@@ -86,32 +106,36 @@ class image
     #[route("image/list")]
     public static function list(array $args): string
     {
-        $command = "ls -l " . \config::images_dir . " | grep -i '\\.img$'";
+        $path = \config::images_dir;
 
-        $result = self::execute_command($command);
-        if (empty($result)) {
-            $result[] = "No images found";
+        $files = scandir($path);
+        $images = [];
+
+        foreach ($files as $file) {
+            if (is_file($path . \config::sep . $file) && pathinfo($file, PATHINFO_EXTENSION) === "img") {
+                $images[] = [
+                    "name" => $file,
+                    "size" => filesize($path . \config::sep . $file),
+                    "type" => "qcow2",
+                ];
+            }
+        }
+
+        if (empty($images)) {
+            return "<h3>No images found</h3>";
         }
         $html = "";
-        foreach ($result as $line) {
-            list(
-                $file_rights,
-                $skip,
-                $owner,
-                $group,
-                $file_size,
-                $file_month,
-                $file_day,
-                $file_time,
-                $image_name
-            ) = explode(" ", $line);
-            // convert file size to human readable format in bytes, kb, mb, etc
-            $file_size = \mc\util::size_bytes_to_readable($file_size);
-            $html .= "<tr><td><a href='?q=image/manage/info/{$image_name}'>{$image_name}</a></td><td>{$file_size}</td><td>qcow2</td></tr>";
-            //"<li><a href='?q=image/manage/info/{$image_name}'>{$image_name}</a></li>";
+        foreach ($images as $image) {
+            $html .= template::load(self::TEMPLATE_PATH . \config::sep . "image/list-item.tpl.php", template::comment_modifiers)
+                ->fill([
+                    "image-name" => "<a href='/?q=image/manage/info/{$image["name"]}'>{$image["name"]}</a>",
+                    "image-size" => \mc\util::size_bytes_to_readable($image["size"]),
+                    "image-type" => $image["type"],
+                ])
+                ->value();
         }
 
-        return template::load(self::TEMPLATE_PATH . \config::sep . "image_list.tpl.php", template::comment_modifiers)
+        return template::load(self::TEMPLATE_PATH . \config::sep . "image/list.tpl.php", template::comment_modifiers)
             ->fill([
                 "image-list-info" => $html,
             ])
@@ -122,7 +146,7 @@ class image
     public static function create(array $args): string
     {
         if(empty($_POST)) {
-            return template::load(self::TEMPLATE_PATH . \config::sep . "image_create.tpl.php", template::comment_modifiers)->value();
+            return template::load(self::TEMPLATE_PATH . \config::sep . "image/create.tpl.php", template::comment_modifiers)->value();
         }
         $image_name = filter_input(INPUT_POST, "image-name", FILTER_SANITIZE_SPECIAL_CHARS);
         $image_size = filter_input(INPUT_POST, "image-size", FILTER_SANITIZE_NUMBER_INT);
@@ -154,6 +178,8 @@ class image
         if(empty($output)) {
             return "error: no output";
         }
+
+        self::$menu["check/{$image_name}"] = "Check Image";
         return "<pre><code>" . implode("\n", $output) . "</code></pre>";
     }
 
@@ -166,5 +192,23 @@ class image
             return "error: no output";
         }
         return $result[0] ?? "unknown error";
+    }
+
+    public static function check(array $args): string
+    {
+        if(empty($args)) {
+            return "error: missing image name";
+        }
+        $image_name = filter_var($args[0], FILTER_SANITIZE_SPECIAL_CHARS);
+        if (empty($image_name)) {
+            return "error: invalid image name";
+        }
+
+        $command = self::QEMU_IMG . " check " . \config::images_dir . \config::sep . "{$image_name}";
+        $output = self::execute_command($command);
+        if(empty($output)) {
+            return "error: no output";
+        }
+        return "<pre><code>" . implode("\n", $output) . "</code></pre>";
     }
 }
