@@ -2,8 +2,6 @@
 
 namespace mc;
 
-use BackedEnum;
-
 class util
 {
     public static function size_bytes_to_readable(int $sizeBytes): string
