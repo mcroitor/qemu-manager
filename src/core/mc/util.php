@@ -2,9 +2,6 @@
 
 namespace mc;
 
-use BackedEnum;
-use UnitEnum;
-
 class util
 {
     public static function size_bytes_to_readable(int $sizeBytes): string
@@ -47,7 +44,7 @@ class util
         return "<pre><code>{$code}</code></pre>";
     }
 
-    public static function select(UnitEnum $enum): string
+    public static function select(string $enumClass): string
     {
         $class_name = $enum::class;
         $html = "<select name='{$class_name}'>";
