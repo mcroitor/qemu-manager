@@ -48,8 +48,9 @@ class util
     {
         $class_name = $enum::class;
         $html = "<select name='{$class_name}'>";
-        foreach ($enum::cases() as $key => $value) {
-            $html .= "<option value='" . htmlspecialchars($key, ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . "</option>";
+        foreach ($enum::cases() as $value) {
+            $optionValue = $value instanceof BackedEnum ? $value->value : $value->name;
+            $html .= "<option value='" . htmlspecialchars($optionValue, ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($value->name, ENT_QUOTES, 'UTF-8') . "</option>";
         }
         $html .= "</select>";
         return $html;
