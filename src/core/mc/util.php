@@ -46,7 +46,7 @@ class util
         return "<pre><code>{$code}</code></pre>";
     }
 
-    public static function select(BackedEnum $enum): string
+    public static function select(string $enumClass): string
     {
         $class_name = $enum::class;
         $html = "<select name='{$class_name}'>";
