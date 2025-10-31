@@ -1,17 +1,17 @@
 <?php
 
-namespace mc\sql;
+namespace Mc\Sql;
 
-use \mc\sql\database;
+use \Mc\Sql\Database;
 
 /**
  * Simple CRUD implementation
  */
-class crud
+class Crud
 {
-    private $_db;
-    private $_table;
-    private $_key;
+    private $db;
+    private $table;
+    private $key;
 
     /**
      * crud constructor, must be passed a database object and a table name
@@ -22,20 +22,21 @@ class crud
      */
     public function __construct(database $db, string $table, $key = "id")
     {
-        $this->_db = $db;
-        $this->_table = $table;
-        $this->_key = $key;
+        $this->db = $db;
+        $this->table = $table;
+        $this->key = $key;
     }
 
     /**
      * insert a new record. Returns the id of the new record
      *
      * @param array|object $data
+     * @return string|false
      */
-    public function insert($data)
+    public function insert(array|object $data): string|false
     {
         $data = (array)$data;
-        return $this->_db->insert($this->table(), $data);
+        return $this->db->insert($this->table(), $data);
     }
 
     /**
@@ -44,9 +45,9 @@ class crud
      * @param int|string $id
      * @return array
      */
-    public function select($id)
+    public function select(int|string $id): array
     {
-        $result = $this->_db->select($this->table(), ["*"], [$this->key() => $id], database::LIMIT1);
+        $result = $this->db->select($this->table(), ["*"], [$this->key() => $id], database::LIMIT1);
         if (count($result) === 0) {
             return [];
         }
@@ -60,9 +61,9 @@ class crud
      * @param int $limit
      * @return array
      */
-    public function all($offset = 0, $limit = 100)
+    public function all(int $offset = 0, int $limit = 100): array
     {
-        return $this->_db->select($this->table(), ["*"], [], ["offset" => $offset, "limit" => $limit]);
+        return $this->db->select($this->table(), ["*"], [], ["offset" => $offset, "limit" => $limit]);
     }
 
     /**
@@ -70,36 +71,40 @@ class crud
      * parameter <b>$data</b> must include the key
      *
      * @param array|object $data
+     * @return array
      */
-    public function update($data)
+    public function update(array|object $data): array
     {
         $data = (array)$data;
-        $this->_db->update($this->table(), $data, [$this->key() => $data[$this->key()]]);
+        return $this->db->update($this->table(), $data, [$this->key() => $data[$this->key()]]);
     }
 
     /**
      * if $data object contains key property, table will be
      * updated, otherwise new line will be inserted.
      *
-     * @param $data
+     * @param array|object $data
+     * @return array if object is updated
+     * @return string if object is inserted, the id of the new object
+     * @return false if object is not inserted or updated
      */
-    public function insert_or_update($data)
+    public function insertOrUpdate(array|object $data): array|string|false
     {
         /// no key - insert object
-        if (empty($data[$this->_key])) {
-            $this->insert($data);
+        if (empty($data[$this->key])) {
+            return $this->insert($data);
         }
 
-        $key = $data[$this->_key];
+        $key = $data[$this->key];
         echo "[debug] key found " . $key . PHP_EOL;
         $result = $this->select($key);
         /// object not found, insert object
         if (empty($result)) {
-            $this->insert($data);
+            return $this->insert($data);
         }
 
         /// update object
-        $this->update($data);
+        return $this->update($data);
     }
 
     /**
@@ -107,29 +112,29 @@ class crud
      * 
      * @param int|string $id
      */
-    public function delete($id)
+    public function delete(int|string $id): void
     {
-        $this->_db->delete($this->table(), [$this->key() => $id]);
+        $this->db->delete($this->table(), [$this->key() => $id]);
     }
 
     /**
-     * return the table name, userd for all CRUD operations
+     * return the table name, used for all CRUD operations
      * 
      * @return string
      */
-    public function table()
+    public function table(): string
     {
-        return $this->_table;
+        return $this->table;
     }
 
     /**
-     * return the key name, userd for all CRUD operations
+     * return the key name, used for all CRUD operations
      * 
      * @return string
      */
-    public function key()
+    public function key(): string
     {
-        return $this->_key;
+        return $this->key;
     }
 
     /**
@@ -137,9 +142,9 @@ class crud
      * 
      * @return int
      */
-    public function count()
+    public function count(): int
     {
-        $result = $this->_db->select($this->table(), ["count(*) as count"]);
-        return $result[0]["count"];
+        $result = $this->db->select($this->table(), ["count(*) as count"]);
+        return intval($result[0]["count"]);
     }
 }

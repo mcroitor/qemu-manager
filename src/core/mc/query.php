@@ -1,13 +1,11 @@
 <?php
 
-namespace mc\sql;
-
-use PDO;
+namespace Mc\Sql;
 
 /**
  * SQL query builder.
  */
-class query {
+class Query {
     /**
      * supported commands
      */
@@ -55,56 +53,56 @@ class query {
      * return query command type
      * @return string
      */
-    public function get_type(): string {
+    public function getType(): string {
         return $this->type;
     }
 
     /**
      * create query for select
-     * @return query
+     * @return Query
      */
-    public static function select(): query{
-        return new query([
+    public static function select(): Query{
+        return new Query([
             self::TYPE => self::SELECT,
         ]);
     }
 
     /**
      * create query for insert
-     * @return query
+     * @return Query
      */
-    public static function insert(): query{
-        return new query([
+    public static function insert(): Query{
+        return new Query([
             self::TYPE => self::INSERT,
         ]);
     }
 
     /**
      * create query for update
-     * @return query
+     * @return Query
      */
-    public static function update(): query{
-        return new query([
+    public static function update(): Query{
+        return new Query([
             self::TYPE => self::UPDATE,
         ]);
     }
 
     /**
      * create query for delete
-     * @return query
+     * @return Query
      */
-    public static function delete(): query{
-        return new query([
+    public static function delete(): Query{
+        return new Query([
             self::TYPE => self::DELETE,
         ]);
     }
 
     /**
      * clone a query
-     * @return query
+     * @return Query
      */
-    public function clone(): query {
-        return new query([
+    public function clone(): Query {
+        return new Query([
             self::TYPE => $this->type,
             self::TABLE => $this->table,
             self::FIELDS => $this->fields,
@@ -118,9 +116,9 @@ class query {
     /**
      * set fields and return new query
      * @param array $fields
-     * @return query
+     * @return Query
      */
-    public function fields(array $fields): query {
+    public function fields(array $fields): Query {
         $result = $this->clone();
         $result->fields = $fields;
         return $result;
@@ -129,9 +127,9 @@ class query {
     /**
      * set values and return new query
      * @param array $values
-     * @return query
+     * @return Query
      */
-    public function values(array $values): query {
+    public function values(array $values): Query {
         $result = $this->clone();
         $result->values = $values;
         return $result;
@@ -140,9 +138,9 @@ class query {
     /**
      * set where conditions and return new query
      * @param array $where
-     * @return query
+     * @return Query
      */
-    public function where(array $where): query {
+    public function where(array $where): Query {
         $result = $this->clone();
         $result->where = $where;
         return $result;
@@ -151,9 +149,9 @@ class query {
     /**
      * set order conditions and return new query
      * @param array $order
-     * @return query
+     * @return Query
      */
-    public function order(array $order): query {
+    public function order(array $order): Query {
         $result = $this->clone();
         $result->order = $order;
         return $result;
@@ -162,9 +160,9 @@ class query {
     /**
      * set limit conditions and return new query
      * @param array $limit
-     * @return query
+     * @return Query
      */
-    public function limit(int $limit, int $offset = 0): query {
+    public function limit(int $limit, int $offset = 0): Query {
         $result = $this->clone();
         $result->limit = [
             'offset' => $offset,
@@ -176,9 +174,9 @@ class query {
     /**
      * set table and return new query
      * @param string $table
-     * @return query
+     * @return Query
      */
-    public function table(string $table): query {
+    public function table(string $table): Query {
         $result = $this->clone();
         $result->table = $table;
         return $result;
@@ -191,11 +189,11 @@ class query {
     public function build(): string {
         $replace = [
             "%table%" => $this->table,
-            "%fields%" => $this->build_fields(),
-            "%values%" => $this->build_values(),
-            "%where%" => $this->build_where(),
-            "%order%" => $this->build_order(),
-            "%limit%" => $this->build_limit(),
+            "%fields%" => $this->buildFields(),
+            "%values%" => $this->buildValues(),
+            "%where%" => $this->buildWhere(),
+            "%order%" => $this->buildOrder(),
+            "%limit%" => $this->buildLimit(),
         ];
         return \trim(\strtr(self::PATTERN[$this->type], $replace));
     }
@@ -204,7 +202,7 @@ class query {
      * return fields string
      * @return string
      */
-    protected function build_fields(): string {
+    protected function buildFields(): string {
         if(empty($this->fields)){
             return "*";
         }
@@ -215,7 +213,7 @@ class query {
      * return values string
      * @return string
      */
-    protected function build_values(): string {
+    protected function buildValues(): string {
         if(empty($this->values)){
             return "";
         }
@@ -227,7 +225,7 @@ class query {
      * return where string
      * @return string
      */
-    protected function build_where(): string {
+    protected function buildWhere(): string {
         if(empty($this->where)){
             return "";
         }
@@ -252,7 +250,7 @@ class query {
      * return order string
      * @return string
      */
-    protected function build_order(): string {
+    protected function buildOrder(): string {
         if(empty($this->order)){
             return "";
         }
@@ -267,7 +265,7 @@ class query {
      * return limit string
      * @return string
      */
-    protected function build_limit(): string {
+    protected function buildLimit(): string {
         if(!$this->limit){
             return "";
         }
@@ -283,7 +281,7 @@ class query {
      * convert query object to string
      * @return string
      */
-    public function __toString() {
+    public function __toString(): string {
         return $this->build();
     }
 }
