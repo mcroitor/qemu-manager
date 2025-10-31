@@ -51,7 +51,7 @@ class util
         $class_name = $enum::class;
         $html = "<select name='{$class_name}'>";
         foreach ($enum::cases() as $key => $value) {
-            $html .= "<option value='{$key}'>{$value}</option>";
+            $html .= "<option value='" . htmlspecialchars($key, ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . "</option>";
         }
         $html .= "</select>";
         return $html;
