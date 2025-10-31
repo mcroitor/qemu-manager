@@ -46,12 +46,14 @@ class util
         return "<pre><code>{$code}</code></pre>";
     }
 
-    public static function select(BackedEnum $enum): string
+    public static function select(string $enumClass): string
     {
-        $class_name = $enum::class;
-        $html = "<select name='{$class_name}'>";
-        foreach ($enum::cases() as $key => $value) {
-            $html .= "<option value='{$key}'>{$value}</option>";
+        $html = "<select name='" . htmlspecialchars($enumClass, ENT_QUOTES, 'UTF-8') . "'>";
+        foreach ($enumClass::cases() as $case) {
+            // For BackedEnum, use the backing value; for UnitEnum, use the name
+            $value = $case instanceof \BackedEnum ? $case->value : $case->name;
+            $html .= "<option value='" . htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . "'>" 
+                   . htmlspecialchars($case->name, ENT_QUOTES, 'UTF-8') . "</option>";
         }
         $html .= "</select>";
         return $html;

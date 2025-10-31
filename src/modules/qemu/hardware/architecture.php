@@ -20,8 +20,8 @@ enum architecture {
     case or1k;
     case ppc;
     case ppc64;
-    case riskv32;
-    case riskv64;
+    case riscv32;
+    case riscv64;
     case rx;
     case s390x;
     case sh4;
