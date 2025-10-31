@@ -16,6 +16,7 @@ $page = new page();
 $page->menu([
     "?q=image/manage" => "Images",
     "?q=machine/manage" => "Virtual Machines",
+    "?q=network/manage" => "Network Settings",
 ]);
 
 $page->content(\mc\router::run());

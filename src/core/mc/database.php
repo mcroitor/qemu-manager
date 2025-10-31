@@ -1,15 +1,15 @@
 <?php
 
-namespace mc\sql;
+namespace Mc\Sql;
 
-use mc\sql\query;
+use Mc\Sql\Query;
 
 /**
  * PDO wrapper
  *
  * @author Croitor Mihail <mcroitor@gmail.com>
  */
-class database
+class Database
 {
 
     public const LIMIT1 = [
@@ -57,9 +57,9 @@ class database
      * @param bool $need_fetch
      * @return array
      */
-    public function query_sql(string $query, string $error = "Error: ", bool $need_fetch = true): array
+    public function query(string $query, string $error = "Error: ", bool $need_fetch = true): array
     {
-        $array = array();
+        $array = [];
         try {
             $result = $this->pdo->query($query);
             if ($result === false) {
@@ -84,15 +84,15 @@ class database
      * Method for dump parsing and execution
      * @param string $dump
      */
-    public function parse_sqldump(string $dump)
+    public function parseSqlDump(string $dump)
     {
         if (\file_exists($dump)) {
             $sql = \str_replace(["\n\r", "\r\n", "\n\n"], "\n", file_get_contents($dump));
             $queries = \explode(";", $sql);
             foreach ($queries as $query) {
-                $query = $this->strip_sqlcomment(trim($query));
+                $query = $this->stripSqlComment(trim($query));
                 if ($query != '') {
-                    $this->query_sql($query, "parse error:", false);
+                    $this->query($query, "parse error:", false);
                 }
             }
         }
@@ -103,13 +103,13 @@ class database
      * @param string $string
      * @return string
      */
-    private function strip_sqlcomment(string $string = ''): string
+    private function stripSqlComment(string $string = ''): string
     {
         $RXSQLComments = '@(--[^\r\n]*)|(/\*[\w\W]*?(?=\*/)\*/)@ms';
         return (empty($string) ? '' : \preg_replace($RXSQLComments, '', $string));
     }
 
-    private function parse_where(array $where)
+    private function parseWhere(array $where)
     {
         $tmp = [];
         foreach ($where as $key => $value) {
@@ -142,12 +142,12 @@ class database
 
         $query = "SELECT {$fields} FROM {$table}";
         if (!empty($where)) {
-            $query .= " WHERE " . \implode(" AND ", $this->parse_where($where));
+            $query .= " WHERE " . \implode(" AND ", $this->parseWhere($where));
         }
         if (!empty($limit)) {
             $query .= " LIMIT {$limit['offset']}, {$limit['limit']}";
         }
-        return $this->query_sql($query);
+        return $this->query($query);
     }
 
     /**
@@ -155,9 +155,9 @@ class database
      * @param string $table
      * @param string $column_name column name for selection.
      * @param array $where associative conditions.
-     * @param string $limit definition sample: ['offset' => '1', 'limit' => '100'].
+     * @param array $limit definition sample: ['offset' => '1', 'limit' => '100'].
      */
-    public function select_column(string $table, string $column_name, array $where = [], array $limit = []): array
+    public function selectColumn(string $table, string $column_name, array $where = [], array $limit = []): array
     {
         $tmp = $this->select($table, [$column_name], $where, $limit);
         $result = [];
@@ -175,8 +175,8 @@ class database
      */
     public function delete(string $table, array $conditions): array
     {
-        $query = "DELETE FROM {$table} WHERE " . \implode(" AND ", $this->parse_where($conditions));
-        return $this->query_sql($query, "Error: ", false);
+        $query = "DELETE FROM {$table} WHERE " . \implode(" AND ", $this->parseWhere($conditions));
+        return $this->query($query, "Error: ", false);
     }
 
     /**
@@ -191,12 +191,15 @@ class database
     {
         $tmp2 = [];
         foreach ($values as $key => $value) {
+            if (is_null($value)) {
+                $value = "";
+            }
             $value = $this->pdo->quote($value);
             $tmp2[] = "{$key}={$value}";
         }
 
-        $query = "UPDATE {$table} SET " . \implode(", ", $tmp2) . " WHERE " . implode(" AND ", $this->parse_where($conditions));
-        return $this->query_sql($query, "Error: ", false);
+        $query = "UPDATE {$table} SET " . \implode(", ", $tmp2) . " WHERE " . implode(" AND ", $this->parseWhere($conditions));
+        return $this->query($query, "Error: ", false);
     }
 
     /**
@@ -220,7 +223,7 @@ class database
         }
         $data = \implode(",  ", $quoted_values);
         $query = "INSERT INTO {$table} ($columns) VALUES ({$data})";
-        $this->query_sql($query, "Error: ", false);
+        $this->query($query, "Error: ", false);
         return $this->pdo->lastInsertId();
     }
 
@@ -241,9 +244,9 @@ class database
      * @param string $table
      * @param string $column
      */
-    public function unique_values(string $table, string $column): array
+    public function uniqueValues(string $table, string $column): array
     {
-        return $this->query_sql("SELECT {$column} FROM {$table} GROUP BY {$column}");
+        return $this->query("SELECT {$column} FROM {$table} GROUP BY {$column}");
     }
 
     /**
@@ -252,18 +255,18 @@ class database
      * @param string $column
      * @return array
      */
-    public function count_unique_values(string $table, string $column): array
+    public function countUniqueValues(string $table, string $column): array
     {
-        return $this->query_sql("SELECT {$column}, count({$column}) AS count FROM {$table} GROUP BY {$column}");
+        return $this->query("SELECT {$column}, count({$column}) AS count FROM {$table} GROUP BY {$column}");
     }
 
     /**
      * Execute a query object.
-     * @param query $query
+     * @param Query $query
      * @return array
      */
-    public function exec(query $query): array
+    public function exec(Query $query): array
     {
-        return $this->query_sql($query->build(), "Error: ", $query->get_type() === query::SELECT);
+        return $this->query($query->build(), "Error: ", $query->getType() === query::SELECT);
     }
 }
