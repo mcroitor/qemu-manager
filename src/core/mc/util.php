@@ -2,8 +2,6 @@
 
 namespace mc;
 
-use BackedEnum;
-
 class util
 {
     public static function size_bytes_to_readable(int $sizeBytes): string
@@ -46,12 +44,13 @@ class util
         return "<pre><code>{$code}</code></pre>";
     }
 
-    public static function select(BackedEnum $enum): string
+    public static function select(\UnitEnum $enum): string
     {
         $class_name = $enum::class;
         $html = "<select name='{$class_name}'>";
-        foreach ($enum::cases() as $key => $value) {
-            $html .= "<option value='{$key}'>{$value}</option>";
+        foreach ($enum::cases() as $value) {
+            $option_value = $value instanceof \BackedEnum ? $value->value : $value->name;
+            $html .= "<option value='{$option_value}'>{$value->name}</option>";
         }
         $html .= "</select>";
         return $html;
