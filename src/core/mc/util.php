@@ -2,9 +2,6 @@
 
 namespace mc;
 
-use BackedEnum;
-use UnitEnum;
-
 class util
 {
     public static function size_bytes_to_readable(int $sizeBytes): string
@@ -47,15 +44,13 @@ class util
         return "<pre><code>{$code}</code></pre>";
     }
 
-    public static function select(UnitEnum $enum): string
+    public static function select(string $enumClass): string
     {
         $class_name = $enum::class;
         $html = "<select name='{$class_name}'>";
-        foreach ($enum::cases() as $case) {
-            // For BackedEnum, use the backing value; for UnitEnum, use the name
-            $value = $case instanceof BackedEnum ? $case->value : $case->name;
-            $label = $case->name;
-            $html .= "<option value='" . htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . "</option>";
+        foreach ($enum::cases() as $value) {
+            $optionValue = $value instanceof BackedEnum ? $value->value : $value->name;
+            $html .= "<option value='" . htmlspecialchars($optionValue, ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($value->name, ENT_QUOTES, 'UTF-8') . "</option>";
         }
         $html .= "</select>";
         return $html;
