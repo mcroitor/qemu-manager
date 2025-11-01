@@ -155,10 +155,12 @@ class image
                  ->maxLength('image-name', 100, 'Image name is too long (max 100 characters)')
                  ->filename('image-name', 'Invalid characters in image name')
                  ->pattern('image-name', '/^[a-zA-Z0-9_-]+$/', 'Image name can only contain letters, numbers, hyphens and underscores')
-                 ->custom('image-name', function($value) {
-                     // Проверяем, что файл с таким именем не существует
+                 ->custom('image-name', function($value) use ($validator) {
+                     // Проверяем, что файл с таким именем и расширением не существует
+                     $format = $validator->get('image-format', 'qcow2');
+                     $filename = $value . '.' . $format;
                      $images = self::list_images();
-                     return !in_array($value . '.img', $images);
+                     return !in_array($filename, $images);
                  }, 'Image with this name already exists');
 
         // Валидация размера образа
