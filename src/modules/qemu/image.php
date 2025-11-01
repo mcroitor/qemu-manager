@@ -178,7 +178,7 @@ class image
             $error_html = "<div style='color: red; background: #ffe6e6; padding: 10px; border: 1px solid #ff0000; margin-bottom: 10px;'>";
             $error_html .= "<h4>Please correct the following errors:</h4><ul>";
             foreach ($validator->getErrors() as $error) {
-                $error_html .= "<li>{$error}</li>";
+                $error_html .= "<li>" . htmlspecialchars($error) . "</li>";
             }
             $error_html .= "</ul></div>";
 
