@@ -266,7 +266,14 @@ class Validator
         if (isset($this->data[$field])) {
             $value = (string)$this->data[$field];
             // Проверяем на попытки выхода из директории
-            if (strpos($value, '..') !== false || strpos($value, './') !== false || strpos($value, '.\\') !== false) {
+            if (
+                str_starts_with($value, './') ||
+                str_starts_with($value, '.\\') ||
+                strpos($value, '/../') !== false ||
+                strpos($value, '\\..\\') !== false ||
+                $value === '..' ||
+                $value === '.'
+            ) {
                 $this->addError($field, $message);
                 return $this;
             }
