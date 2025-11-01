@@ -17,6 +17,19 @@ class machine {
     private const QEMU_SYSTEM = "qemu-system-";
     private static $platform = architecture::x86_64;
 
+    // Error messages constants
+    private const ERR_NAME_NOT_SPECIFIED = 'Machine name not specified';
+    private const ERR_NAME_INVALID = 'Invalid machine name format';
+    private const ERR_VM_NOT_FOUND = 'Virtual machine does not exist';
+    private const ERR_IMAGE_NOT_FOUND = 'Disk image file does not exist';
+    private const ERR_IMAGE_INVALID = 'Invalid disk image path';
+    private const ERR_CDROM_NOT_FOUND = 'CDROM image file does not exist';
+    private const ERR_CDROM_INVALID = 'Invalid CDROM image path';
+    
+    // Success messages constants
+    private const MSG_VM_STARTED = 'Virtual machine started successfully';
+    private const MSG_VM_STOPPED = 'Virtual machine stop signal sent';
+
     private static $menu = [
         "list" => "List VM",
         "create" => "Create VM",
@@ -43,19 +56,25 @@ class machine {
      */
     private static function start(array $args): string
     {
-        if (empty($args[0])) {
-            return "<div style='color: red;'>Error: Machine name not specified</div>";
-        }
-
-        $machine_name = filter_var($args[0], FILTER_SANITIZE_SPECIAL_CHARS);
-        
         try {
-            $machine = \config::$db->select("virtual_machine", ["*"], ["name" => $machine_name]);
-            
-            if (empty($machine)) {
-                return "<div style='color: red;'>Error: Virtual machine '{$machine_name}' not found</div>";
+            // Enhanced validation for machine name
+            if (empty($args[0])) {
+                return "<div style='color: red;'>Error: " . self::ERR_NAME_NOT_SPECIFIED . "</div>";
             }
+            
+            $validator = new \mc\Validator(['machine_name' => $args[0]]);
+            $validator
+                ->required('machine_name', self::ERR_NAME_NOT_SPECIFIED)
+                ->machineName('machine_name', self::ERR_NAME_INVALID)
+                ->exists('machine_name', 'virtual_machine', 'name', self::ERR_VM_NOT_FOUND);
 
+            if ($validator->hasErrors()) {
+                return "<div style='color: red;'>Error: " . htmlspecialchars($validator->getFirstError()) . "</div>";
+            }
+            
+            $machine_name = $validator->get('machine_name');
+            
+            $machine = \config::$db->select("virtual_machine", ["*"], ["name" => $machine_name]);
             $vm = $machine[0];
 
             // Build QEMU command
@@ -66,12 +85,30 @@ class machine {
             
             if (!empty($vm['hda'])) {
                 $image_path = \config::images_dir . \config::sep . $vm['hda'];
-                $command .= " -hda " . escapeshellarg($image_path);
+                // Validate image path for security
+                if (!file_exists($image_path)) {
+                    return "<div style='color: red;'>Error: " . self::ERR_IMAGE_NOT_FOUND . "</div>";
+                }
+                $real_image_path = realpath($image_path);
+                $real_images_dir = realpath(\config::images_dir);
+                if ($real_image_path === false || $real_images_dir === false || strpos($real_image_path, $real_images_dir) !== 0) {
+                    return "<div style='color: red;'>Error: " . self::ERR_IMAGE_INVALID . "</div>";
+                }
+                $command .= " -hda " . escapeshellarg($real_image_path);
             }
             
             if (!empty($vm['cdrom'])) {
                 $cdrom_path = \config::images_dir . \config::sep . $vm['cdrom'];
-                $command .= " -cdrom " . escapeshellarg($cdrom_path);
+                // Validate cdrom path for security
+                if (!file_exists($cdrom_path)) {
+                    return "<div style='color: red;'>Error: " . self::ERR_CDROM_NOT_FOUND . "</div>";
+                }
+                $real_cdrom_path = realpath($cdrom_path);
+                $real_images_dir = realpath(\config::images_dir);
+                if ($real_cdrom_path === false || $real_images_dir === false || strpos($real_cdrom_path, $real_images_dir) !== 0) {
+                    return "<div style='color: red;'>Error: " . self::ERR_CDROM_INVALID . "</div>";
+                }
+                $command .= " -cdrom " . escapeshellarg($real_cdrom_path);
             }
             
             // Set up networking
@@ -86,13 +123,13 @@ class machine {
             $output = util::execute_command($command);
             
             if (empty($output) || !isset($output[0]) || strpos($output[0], 'error') === false) {
-                return "<div style='color: green;'>Virtual machine '{$machine_name}' started successfully</div>";
+                return "<div style='color: green;'>" . self::MSG_VM_STARTED . ": '{$machine_name}'</div>";
             } else {
                 return "<div style='color: red;'>Error starting VM: " . htmlspecialchars(implode("\n", $output)) . "</div>";
             }
             
         } catch (\Exception $e) {
-            \config::$logger->error("Error starting VM '{$machine_name}': " . $e->getMessage());
+            \config::$logger->error("Error starting VM: " . $e->getMessage());
             return "<div style='color: red;'>Error: " . htmlspecialchars($e->getMessage()) . "</div>";
         }
     }
@@ -102,60 +139,90 @@ class machine {
      */
     private static function stop(array $args): string
     {
-        if (empty($args[0])) {
-            return "<div style='color: red;'>Error: Machine name not specified</div>";
-        }
-
-        $machine_name = filter_var($args[0], FILTER_SANITIZE_SPECIAL_CHARS);
-        
         try {
+            if (empty($args[0])) {
+                return "<div style='color: red;'>Error: " . self::ERR_NAME_NOT_SPECIFIED . "</div>";
+            }
+            
+            // Enhanced validation for machine name
+            $validator = new \mc\Validator(['machine_name' => $args[0]]);
+            $validator
+                ->required('machine_name', self::ERR_NAME_NOT_SPECIFIED)
+                ->machineName('machine_name', self::ERR_NAME_INVALID)
+                ->exists('machine_name', 'virtual_machine', 'name', self::ERR_VM_NOT_FOUND);
+
+            if ($validator->hasErrors()) {
+                return "<div style='color: red;'>Error: " . htmlspecialchars($validator->getFirstError()) . "</div>";
+            }
+            
+            $machine_name = $validator->get('machine_name');
+            
+            // TODO: Improve process management using PID files
+            // Current implementation uses pkill which may affect multiple processes
+            // Better approach: Store PID in file when starting VM, use kill with PID
+            
             // Send SIGTERM to the QEMU process
-            $command = "pkill -f \"qemu.*{$machine_name}\"";
+            // Note: Using pkill with pattern matching - ensure machine names are unique
+            $pattern = "qemu-system.*-name {$machine_name}";
+            $command = "pkill -f " . escapeshellarg($pattern);
             \config::$logger->info("Stopping VM '{$machine_name}' with command: {$command}");
             
             $output = util::execute_command($command);
             
-            return "<div style='color: green;'>Virtual machine '{$machine_name}' stop signal sent</div>";
+            return "<div style='color: green;'>" . self::MSG_VM_STOPPED . ": '{$machine_name}'</div>";
             
         } catch (\Exception $e) {
-            \config::$logger->error("Error stopping VM '{$machine_name}': " . $e->getMessage());
+            \config::$logger->error("Error stopping VM: " . $e->getMessage());
             return "<div style='color: red;'>Error: " . htmlspecialchars($e->getMessage()) . "</div>";
         }
     }
 
     /**
-     * Delete virtual machine and related network settings
+     * Delete virtual machine and all related data (network settings, port forwarding)
      */
     private static function delete(array $args): string
     {
-        if (empty($args[0])) {
-            return "<div style='color: red;'>Error: Machine name not specified</div>";
-        }
-
-        $machine_name = filter_var($args[0], FILTER_SANITIZE_SPECIAL_CHARS);
-        
         try {
-            $machine = \config::$db->select("virtual_machine", ["*"], ["name" => $machine_name]);
-            
-            if (empty($machine)) {
-                return "<div style='color: red;'>Error: Virtual machine '{$machine_name}' not found</div>";
+            if (empty($args[0])) {
+                return "<div style='color: red;'>Error: " . self::ERR_NAME_NOT_SPECIFIED . "</div>";
             }
+            
+            // Enhanced validation for machine name
+            $validator = new \mc\Validator(['machine_name' => $args[0]]);
+            $validator
+                ->required('machine_name', self::ERR_NAME_NOT_SPECIFIED)
+                ->machineName('machine_name', self::ERR_NAME_INVALID)
+                ->exists('machine_name', 'virtual_machine', 'name', self::ERR_VM_NOT_FOUND);
+
+            if ($validator->hasErrors()) {
+                return "<div style='color: red;'>Error: " . htmlspecialchars($validator->getFirstError()) . "</div>";
+            }
+            
+            $machine_name = $validator->get('machine_name');
 
             // Remove from database (with cascading delete of related data)
-            \config::$db->delete("virtual_machine", ["name" => $machine_name]);
-
-            // Remove related network interfaces
-            \config::$db->delete("network_interface", ["machine_name" => $machine_name]);
-
-            // Remove related port forwarding
-            \config::$db->delete("port_forwarding", ["machine_name" => $machine_name]);
+            $deleted_rows = \config::$db->delete("virtual_machine", ["name" => $machine_name]);
             
-            \config::$logger->info("Deleted virtual machine and all related data: {$machine_name}");
-            
-            return "<div style='color: green;'>Virtual machine '{$machine_name}' and all related network settings deleted successfully. <a href='/?q=machine/manage/list'>View remaining machines</a></div>";
+            if ($deleted_rows > 0) {
+                // Remove related network interfaces
+                \config::$db->delete("network_interface", ["machine_name" => $machine_name]);
+
+                // Remove related port forwarding
+                \config::$db->delete("port_forwarding", ["machine_name" => $machine_name]);
+                
+                \config::$logger->info("Deleted virtual machine and all related data: {$machine_name}");
+                
+                return "<div style='color: green; background: #e6ffe6; padding: 15px; border: 1px solid #00ff00; margin-bottom: 10px;'>" .
+                       "<h3>✓ Success!</h3>" .
+                       "<p>Virtual machine '<strong>{$machine_name}</strong>' and all related network settings deleted successfully.</p>" .
+                       "<p><a href='/?q=machine/manage/list' class='button'>View remaining machines</a></p>" .
+                       "</div>";
+            } else {
+                return "<div style='color: red;'>Error: Failed to delete virtual machine from database</div>";
+            }
             
         } catch (\Exception $e) {
-            \config::$logger->error("Error deleting VM '{$machine_name}': " . $e->getMessage());
+            \config::$logger->error("Error deleting VM: " . $e->getMessage());
             return "<div style='color: red;'>Error: " . htmlspecialchars($e->getMessage()) . "</div>";
         }
     }
@@ -259,47 +326,37 @@ class machine {
         
         // Обработать POST данные для создания ВМ
         try {
-            $machine_name = filter_input(INPUT_POST, "machine-name", FILTER_SANITIZE_SPECIAL_CHARS);
-            $machine_cpu = filter_input(INPUT_POST, "machine-cpu", FILTER_SANITIZE_NUMBER_INT);
-            $machine_ram = filter_input(INPUT_POST, "machine-ram", FILTER_SANITIZE_NUMBER_INT);
-            $machine_image = filter_input(INPUT_POST, "machine-image", FILTER_SANITIZE_SPECIAL_CHARS);
+            // Enhanced validation using centralized Validator
+            $validator = new \mc\Validator($_POST);
+            
+            $validator
+                ->required('machine-name', 'Machine name is required')
+                ->machineName('machine-name', 'Invalid machine name. Use only letters, numbers, hyphens and underscores')
+                ->unique('machine-name', 'virtual_machine', 'name', 'Virtual machine with this name already exists', [])
+                ->required('machine-cpu', 'CPU cores are required')
+                ->integer('machine-cpu', 'CPU cores must be a number')
+                ->range('machine-cpu', 1, 32, 'CPU cores must be between 1 and 32')
+                ->required('machine-ram', 'RAM is required')
+                ->integer('machine-ram', 'RAM must be a number')
+                ->range('machine-ram', 128, 32768, 'RAM must be between 128MB and 32GB')
+                ->required('machine-image', 'Please select a disk image')
+                ->custom('machine-image', function($value) {
+                    $available_images = image::list_images();
+                    return in_array($value, $available_images);
+                }, 'Selected disk image does not exist');
 
-            // Валидация входных данных
-            $errors = [];
-            if (empty($machine_name) || !preg_match('/^[a-zA-Z0-9_-]+$/', $machine_name)) {
-                $errors[] = "Invalid machine name. Use only letters, numbers, underscores and hyphens.";
-            }
-            if (empty($machine_cpu) || $machine_cpu < 1 || $machine_cpu > 32) {
-                $errors[] = "CPU cores must be between 1 and 32.";
-            }
-            if (empty($machine_ram) || $machine_ram < 128 || $machine_ram > 32768) {
-                $errors[] = "RAM must be between 128MB and 32GB.";
-            }
-            if (empty($machine_image)) {
-                $errors[] = "Please select a disk image.";
-            }
-
-            // Проверить, что машина с таким именем не существует
-            if (!empty($machine_name) && \config::$db->exists("virtual_machine", ["name" => $machine_name])) {
-                $errors[] = "Virtual machine with name '{$machine_name}' already exists.";
-            }
-
-            // Проверить, что образ существует
-            if (!empty($machine_image) && !in_array($machine_image, image::list_images())) {
-                $errors[] = "Selected disk image does not exist.";
-            }
-
-            if (!empty($errors)) {
+            if ($validator->hasErrors()) {
                 $error_html = "<div style='color: red; background: #ffe6e6; padding: 10px; border: 1px solid #ff0000; margin-bottom: 10px;'>";
                 $error_html .= "<h4>Please correct the following errors:</h4><ul>";
-                foreach ($errors as $error) {
-                    $error_html .= "<li>{$error}</li>";
+                foreach ($validator->getErrors() as $error) {
+                    $error_html .= "<li>" . htmlspecialchars($error) . "</li>";
                 }
                 $error_html .= "</ul></div>";
                 
                 // Show form again with errors and previously entered values
                 $images = image::list_images();
                 $list_images = "";
+                $machine_image = $validator->get('machine-image', '');
                 foreach($images as $image){
                     $selected = ($image === $machine_image) ? "selected" : "";
                     $list_images .= "<option value='{$image}' {$selected}>{$image}</option>";
@@ -308,12 +365,18 @@ class machine {
                 return $error_html . template::load(util::sausage("machine.create", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
                     ->fill([
                         "disk-image-list" => $list_images,
-                        "machine-name-value" => htmlspecialchars($machine_name ?? ""),
-                        "machine-cpu-value" => htmlspecialchars($machine_cpu ?? "1"),
-                        "machine-ram-value" => htmlspecialchars($machine_ram ?? "512"),
+                        "machine-name-value" => htmlspecialchars($validator->get('machine-name', '')),
+                        "machine-cpu-value" => htmlspecialchars($validator->get('machine-cpu', '1')),
+                        "machine-ram-value" => htmlspecialchars($validator->get('machine-ram', '512')),
                     ])
                     ->value();
             }
+
+            // Extract validated data
+            $machine_name = $validator->get('machine-name');
+            $machine_cpu = (int)$validator->get('machine-cpu');
+            $machine_ram = (int)$validator->get('machine-ram');
+            $machine_image = $validator->get('machine-image');
 
             // Create database record
             $vm_data = [

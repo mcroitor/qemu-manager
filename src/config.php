@@ -39,6 +39,7 @@ class config {
         "mc/router",
         "mc/template",
         "mc/util",
+        "mc/validator",
         "page",
     ];
 
