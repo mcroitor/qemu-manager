@@ -208,7 +208,7 @@ class image
             
             // Проверяем, что директория существует
             if (!is_dir(\config::images_dir)) {
-                if (!mkdir(\config::images_dir, 0755, true)) {
+                if (!mkdir(\config::images_dir, 0700, true)) {
                     throw new \Exception("Failed to create images directory");
                 }
             }
