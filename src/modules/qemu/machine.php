@@ -91,7 +91,11 @@ class machine {
                 }
                 $real_image_path = realpath($image_path);
                 $real_images_dir = realpath(\config::images_dir);
-                if ($real_image_path === false || $real_images_dir === false || strpos($real_image_path, $real_images_dir) !== 0) {
+                if (
+                    $real_image_path === false ||
+                    $real_images_dir === false ||
+                    strpos($real_image_path, $real_images_dir . DIRECTORY_SEPARATOR) !== 0
+                ) {
                     return "<div style='color: red;'>Error: " . self::ERR_IMAGE_INVALID . "</div>";
                 }
                 $command .= " -hda " . escapeshellarg($real_image_path);
