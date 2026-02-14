@@ -10,6 +10,18 @@ VALUES
     ('app-qemu-path', ''),
     ('site-name', 'QEMU Manager');
 
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'viewer',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_login_at TEXT DEFAULT NULL
+);
+
 CREATE TABLE virtual_machine (
     name TEXT NOT NULL UNIQUE,
     platform TEXT NOT NULL,

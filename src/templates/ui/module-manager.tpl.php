@@ -1,6 +1,6 @@
 <div class="row">
     <div class="content nine columns">
-        <!-- machine-content -->
+        <!-- module-content -->
     </div>
     <div class="actions three columns">
         <!-- menu-list -->
@@ -8,6 +8,6 @@
 </div>
 <div class="row">
     <div class="twelve columns">
-        State: <!-- machine-state -->
+        State: <!-- module-state -->
     </div>
 </div>

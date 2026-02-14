@@ -25,6 +25,15 @@ class NetworkManager {
         "portforward" => "Port Forwarding",
     ];
 
+    private const ALLOWED_COMMANDS = [
+        'list',
+        'create',
+        'edit',
+        'delete',
+        'portforward',
+        'delete_forward',
+    ];
+
     private static function generate_menu(array $menu): string
     {
         $html = "";
@@ -42,10 +51,22 @@ class NetworkManager {
     #[route("network/manage")]
     public static function manage(array $args): string
     {
+        if (!\auth::requireRole(\user::ROLE_OPERATOR)) {
+            return "<div style='color: red; background: #ffe6e6; padding: 15px; border: 1px solid #ff0000; margin-bottom: 10px;'>" .
+                   "<h3>Access denied</h3>" .
+                   "<p>You must be authenticated as operator or admin to access Network Settings.</p>" .
+                   "<p><a href='/?q=auth/login' class='button button-primary'>Login</a></p>" .
+                   "</div>";
+        }
+
         $command = "list";
         if (count($args) > 0) {
             $command = $args[0];
             array_shift($args);
+        }
+
+        if (!in_array($command, self::ALLOWED_COMMANDS, true)) {
+            $command = 'list';
         }
 
         $result = "";
@@ -53,10 +74,10 @@ class NetworkManager {
             $result = self::$command($args);
         }
             
-        return template::load(util::sausage("machine.manager", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+        return template::load(\config::templates_dir . \config::sep . "ui" . \config::sep . "module-manager.tpl.php", template::comment_modifiers)
             ->fill([
-                "machine-state" => self::getNetworkState(),
-                "machine-content" => $result,
+                "module-state" => self::getNetworkState(),
+                "module-content" => $result,
                 "menu-list" => self::generate_menu(self::$menu),
             ])
             ->value();
@@ -71,39 +92,39 @@ class NetworkManager {
             $interfaces = \config::$db->select("network_interface", ["*"]);
             
             if (empty($interfaces)) {
-                return "<h3>No network interfaces configured</h3>" .
-                       "<p><a href='/?q=network/manage/create' class='button button-primary'>Create first interface</a></p>";
+                return template::load(util::sausage("network.list-empty", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                    ->value();
             }
 
-            $html = "<h3>Network Interfaces</h3>";
-            $html .= "<table class='u-full-width data'>";
-            $html .= "<thead><tr>";
-            $html .= "<th>VM Name</th><th>MAC Address</th><th>IP Address</th><th>Netmask</th><th>Gateway</th><th>DNS</th><th>Actions</th>";
-            $html .= "</tr></thead><tbody>";
+            $rows = "";
 
             foreach ($interfaces as $interface) {
-                $html .= "<tr>";
-                $html .= "<td>" . htmlspecialchars($interface['machine_name']) . "</td>";
-                $html .= "<td>" . htmlspecialchars($interface['mac']) . "</td>";
-                $html .= "<td>" . htmlspecialchars($interface['ip'] ?? 'DHCP') . "</td>";
-                $html .= "<td>" . htmlspecialchars($interface['netmask'] ?? 'Auto') . "</td>";
-                $html .= "<td>" . htmlspecialchars($interface['gateway'] ?? 'Auto') . "</td>";
-                $html .= "<td>" . htmlspecialchars($interface['dns'] ?? 'Auto') . "</td>";
-                $html .= "<td>";
-                $html .= "<a href='/?q=network/manage/edit/" . urlencode($interface['machine_name']) . "' class='button w120px'>Edit</a> ";
-                $html .= "<a href='/?q=network/manage/delete/" . urlencode($interface['machine_name']) . "' class='button w120px' onclick='return confirm(\"Delete interface?\")'>Delete</a>";
-                $html .= "</td>";
-                $html .= "</tr>";
+                $rows .= template::load(util::sausage("network.list-row", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                    ->fill([
+                        "machine-name" => htmlspecialchars($interface['machine_name']),
+                        "mac-address" => htmlspecialchars($interface['mac']),
+                        "ip-address" => htmlspecialchars($interface['ip'] ?? 'DHCP'),
+                        "netmask" => htmlspecialchars($interface['netmask'] ?? 'Auto'),
+                        "gateway" => htmlspecialchars($interface['gateway'] ?? 'Auto'),
+                        "dns" => htmlspecialchars($interface['dns'] ?? 'Auto'),
+                        "machine-name-url" => urlencode($interface['machine_name']),
+                    ])
+                    ->value();
             }
 
-            $html .= "</tbody></table>";
-            $html .= "<p><a href='/?q=network/manage/create' class='button button-primary'>Add New Interface</a></p>";
-            
-            return $html;
+            return template::load(util::sausage("network.list", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                ->fill([
+                    "network-rows" => $rows,
+                ])
+                ->value();
             
         } catch (\Exception $e) {
             \config::$logger->error("Error listing network interfaces: " . $e->getMessage());
-            return "<div style='color: red;'>Error loading network interfaces: " . htmlspecialchars($e->getMessage()) . "</div>";
+            return template::load(util::sausage("network.list-error", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                ->fill([
+                    "error-message" => htmlspecialchars($e->getMessage()),
+                ])
+                ->value();
         }
     }
 
@@ -117,18 +138,22 @@ class NetworkManager {
             $machines = \config::$db->select("virtual_machine", ["name"]);
             $machine_options = "";
             foreach ($machines as $machine) {
-                $machine_options .= "<option value='{$machine['name']}'>{$machine['name']}</option>";
+                $safe_name = htmlspecialchars($machine['name']);
+                $machine_options .= "<option value='{$safe_name}'>{$safe_name}</option>";
             }
             
             $network_types = "";
             foreach (self::NETWORK_TYPES as $type => $description) {
-                $network_types .= "<option value='{$type}'>{$description}</option>";
+                $safe_type = htmlspecialchars($type);
+                $safe_description = htmlspecialchars($description);
+                $network_types .= "<option value='{$safe_type}'>{$safe_description}</option>";
             }
 
             $network_adapters = "";
             foreach (network::cases() as $adapter) {
                 $selected = ($adapter === network::virtio_net_pci) ? "selected" : "";
-                $network_adapters .= "<option value='{$adapter->value}' {$selected}>{$adapter->value}</option>";
+                $safe_adapter = htmlspecialchars($adapter->value);
+                $network_adapters .= "<option value='{$safe_adapter}' {$selected}>{$safe_adapter}</option>";
             }
 
             return self::renderNetworkForm([
@@ -176,17 +201,21 @@ class NetworkManager {
                 $machine_options = "";
                 foreach ($machines as $machine) {
                     $selected = ($machine['name'] === $machine_name) ? "selected" : "";
-                    $machine_options .= "<option value='{$machine['name']}' {$selected}>{$machine['name']}</option>";
+                    $safe_name = htmlspecialchars($machine['name']);
+                    $machine_options .= "<option value='{$safe_name}' {$selected}>{$safe_name}</option>";
                 }
                 
                 $network_types = "";
                 foreach (self::NETWORK_TYPES as $type => $description) {
-                    $network_types .= "<option value='{$type}'>{$description}</option>";
+                    $safe_type = htmlspecialchars($type);
+                    $safe_description = htmlspecialchars($description);
+                    $network_types .= "<option value='{$safe_type}'>{$safe_description}</option>";
                 }
 
                 $network_adapters = "";
                 foreach (network::cases() as $adapter) {
-                    $network_adapters .= "<option value='{$adapter->value}'>{$adapter->value}</option>";
+                    $safe_adapter = htmlspecialchars($adapter->value);
+                    $network_adapters .= "<option value='{$safe_adapter}'>{$safe_adapter}</option>";
                 }
 
                 return self::renderNetworkForm([
@@ -254,16 +283,16 @@ class NetworkManager {
                     $html .= "</tr></thead><tbody>";
 
                     foreach ($forwards as $forward) {
-                        $html .= "<tr>";
-                        $html .= "<td>" . htmlspecialchars($forward['machine_name']) . "</td>";
-                        $html .= "<td>" . htmlspecialchars($forward['protocol']) . "</td>";
-                        $html .= "<td>" . htmlspecialchars($forward['host_port']) . "</td>";
-                        $html .= "<td>" . htmlspecialchars($forward['guest_port']) . "</td>";
-                        $html .= "<td>" . htmlspecialchars($forward['guest_ip'] ?? 'Default') . "</td>";
-                        $html .= "<td>";
-                        $html .= "<a href='/?q=network/manage/delete_forward/" . urlencode($forward['machine_name']) . "' class='button' onclick='return confirm(\"Delete rule?\")'>Delete</a>";
-                        $html .= "</td>";
-                        $html .= "</tr>";
+                        $html .= template::load(util::sausage("network.portforward-row", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                            ->fill([
+                                "machine-name" => htmlspecialchars($forward['machine_name']),
+                                "protocol" => htmlspecialchars($forward['protocol']),
+                                "host-port" => htmlspecialchars((string)$forward['host_port']),
+                                "guest-port" => htmlspecialchars((string)$forward['guest_port']),
+                                "guest-ip" => htmlspecialchars($forward['guest_ip'] ?? 'Default'),
+                                "machine-name-url" => urlencode($forward['machine_name']),
+                            ])
+                            ->value();
                     }
                     $html .= "</tbody></table><br>";
                 }
@@ -272,28 +301,22 @@ class NetworkManager {
                 $machines = \config::$db->select("virtual_machine", ["name"]);
                 $machine_options = "";
                 foreach ($machines as $machine) {
-                    $machine_options .= "<option value='{$machine['name']}'>{$machine['name']}</option>";
+                    $safe_name = htmlspecialchars($machine['name']);
+                    $machine_options .= "<option value='{$safe_name}'>{$safe_name}</option>";
                 }
 
-                $html .= "<h4>Add Port Forwarding Rule</h4>";
-                $html .= "<form method='post'>";
-                $html .= "<label>Virtual Machine:</label>";
-                $html .= "<select name='machine_name' required>{$machine_options}</select>";
-                $html .= "<label>Protocol:</label>";
-                $html .= "<select name='protocol' required>";
-                $html .= "<option value='tcp'>TCP</option>";
-                $html .= "<option value='udp'>UDP</option>";
-                $html .= "</select>";
-                $html .= "<label>Host Port:</label>";
-                $html .= "<input type='number' name='host_port' min='1' max='65535' required>";
-                $html .= "<label>Guest Port:</label>";
-                $html .= "<input type='number' name='guest_port' min='1' max='65535' required>";
-                $html .= "<label>Guest IP (optional):</label>";
-                $html .= "<input type='text' name='guest_ip' placeholder='Leave empty for default'>";
-                $html .= "<input type='submit' value='Add Rule' class='button button-primary'>";
-                $html .= "</form>";
+                $portforward_form = template::load(util::sausage("network.portforward-form", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                    ->fill([
+                        "machine-options" => $machine_options,
+                    ])
+                    ->value();
 
-                return $html;
+                return template::load(util::sausage("network.portforward-manager", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                    ->fill([
+                        "portforward-table" => $html,
+                        "portforward-form" => $portforward_form,
+                    ])
+                    ->value();
                 
             } catch (\Exception $e) {
                 return "<div style='color: red;'>Error: " . htmlspecialchars($e->getMessage()) . "</div>";
@@ -352,7 +375,7 @@ class NetworkManager {
                 $error_html = "<div style='color: red; background: #ffe6e6; padding: 10px; border: 1px solid #ff0000; margin-bottom: 10px;'>";
                 $error_html .= "<h4>Please correct the following errors:</h4><ul>";
                 foreach ($errors as $error) {
-                    $error_html .= "<li>{$error}</li>";
+                    $error_html .= "<li>" . htmlspecialchars($error) . "</li>";
                 }
                 $error_html .= "</ul></div>";
                 return $error_html;
@@ -435,7 +458,7 @@ class NetworkManager {
             if (!empty($errors)) {
                 $error_html = "<div style='color: red;'><ul>";
                 foreach ($errors as $error) {
-                    $error_html .= "<li>{$error}</li>";
+                    $error_html .= "<li>" . htmlspecialchars($error) . "</li>";
                 }
                 $error_html .= "</ul></div>";
                 return $error_html;
@@ -462,38 +485,44 @@ class NetworkManager {
     }
 
     /**
+     * Удаление правила port forwarding
+     */
+    private static function delete_forward(array $args): string
+    {
+        if (empty($args[0])) {
+            return "<div style='color: red;'>Error: Machine name not specified</div>";
+        }
+
+        $machine_name = filter_var($args[0], FILTER_SANITIZE_SPECIAL_CHARS);
+
+        try {
+            \config::$db->delete("port_forwarding", ["machine_name" => $machine_name]);
+            \config::$logger->info("Deleted port forwarding rule for machine: {$machine_name}");
+            return "<div style='color: green;'>Port forwarding rule for '{$machine_name}' deleted successfully. <a href='/?q=network/manage/portforward'>Back to port forwarding</a></div>";
+        } catch (\Exception $e) {
+            \config::$logger->error("Error deleting port forwarding rule: " . $e->getMessage());
+            return "<div style='color: red;'>Error: " . htmlspecialchars($e->getMessage()) . "</div>";
+        }
+    }
+
+    /**
      * Рендеринг формы сетевых настроек
      */
     private static function renderNetworkForm(array $data): string
     {
-        $html = "<h3>{$data['form-title']}</h3>";
-        $html .= "<form action='{$data['form-action']}' method='post'>";
-        
-        $html .= "<label for='machine_name'>Virtual Machine:</label>";
-        $html .= "<select id='machine_name' name='machine_name' required>{$data['machine-options']}</select>";
-        
-        $html .= "<label for='mac_address'>MAC Address:</label>";
-        $html .= "<input type='text' id='mac_address' name='mac_address' value='{$data['mac-value']}' ";
-        $html .= "pattern='[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}' ";
-        $html .= "title='Format: AA:BB:CC:DD:EE:FF' required>";
-        
-        $html .= "<label for='ip_address'>IP Address (leave empty for DHCP):</label>";
-        $html .= "<input type='text' id='ip_address' name='ip_address' value='{$data['ip-value']}' placeholder='192.168.1.100'>";
-        
-        $html .= "<label for='netmask'>Netmask:</label>";
-        $html .= "<input type='text' id='netmask' name='netmask' value='{$data['netmask-value']}' placeholder='255.255.255.0'>";
-        
-        $html .= "<label for='gateway'>Gateway:</label>";
-        $html .= "<input type='text' id='gateway' name='gateway' value='{$data['gateway-value']}' placeholder='192.168.1.1'>";
-        
-        $html .= "<label for='dns'>DNS Server:</label>";
-        $html .= "<input type='text' id='dns' name='dns' value='{$data['dns-value']}' placeholder='8.8.8.8'>";
-        
-        $html .= "<input type='submit' value='{$data['submit-text']}' class='button button-primary'>";
-        $html .= "<a href='/?q=network/manage/list' class='button'>Cancel</a>";
-        $html .= "</form>";
-        
-        return $html;
+        return template::load(util::sausage("network.form", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+            ->fill([
+                "form-title" => htmlspecialchars($data['form-title']),
+                "form-action" => htmlspecialchars($data['form-action']),
+                "machine-options" => $data['machine-options'],
+                "mac-value" => htmlspecialchars($data['mac-value']),
+                "ip-value" => htmlspecialchars($data['ip-value']),
+                "netmask-value" => htmlspecialchars($data['netmask-value']),
+                "gateway-value" => htmlspecialchars($data['gateway-value']),
+                "dns-value" => htmlspecialchars($data['dns-value']),
+                "submit-text" => htmlspecialchars($data['submit-text']),
+            ])
+            ->value();
     }
 
     /**
@@ -502,8 +531,11 @@ class NetworkManager {
     private static function getNetworkState(): string
     {
         try {
-            $interface_count = count(\config::$db->select("network_interface", ["count(*) as count"]));
-            $forward_count = count(\config::$db->select("port_forwarding", ["count(*) as count"]));
+            $interface_rows = \config::$db->select("network_interface", ["count(*) as count"]);
+            $forward_rows = \config::$db->select("port_forwarding", ["count(*) as count"]);
+
+            $interface_count = empty($interface_rows) ? 0 : (int)$interface_rows[0]['count'];
+            $forward_count = empty($forward_rows) ? 0 : (int)$forward_rows[0]['count'];
             
             return "Network interfaces: {$interface_count}, Port forwarding rules: {$forward_count}";
         } catch (\Exception $e) {
