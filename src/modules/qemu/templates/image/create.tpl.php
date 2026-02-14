@@ -17,11 +17,11 @@
         
         <label for="image-format">Image format:</label>
         <select id="image-format" name="image-format" required>
-            <option value="qcow2" <!-- qcow2-selected -->>qcow2 (recommended)</option>
-            <option value="raw" <!-- raw-selected -->>raw</option>
-            <option value="vmdk" <!-- vmdk-selected -->>vmdk</option>
-            <option value="vdi" <!-- vdi-selected -->>vdi</option>
-            <option value="vhdx" <!-- vhdx-selected -->>vhdx</option>
+            <option value="qcow2"<!-- qcow2-selected -->>qcow2 (recommended)</option>
+            <option value="raw"<!-- raw-selected -->>raw</option>
+            <option value="vmdk"<!-- vmdk-selected -->>vmdk</option>
+            <option value="vdi"<!-- vdi-selected -->>vdi</option>
+            <option value="vhdx"<!-- vhdx-selected -->>vhdx</option>
         </select>
         
         <input type="submit" value="Create Disk Image" class="button-primary">

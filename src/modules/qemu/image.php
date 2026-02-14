@@ -211,7 +211,7 @@ class image
                  ->custom('image-name', function($value) {
                      // Check if the file with the same name already exists
                      $images = self::list_images();
-                     return !in_array($value . '.img', $images);
+                     return !in_array($filename, $images);
                  }, 'Image with this name already exists');
 
         // Validate image size
@@ -264,7 +264,7 @@ class image
             
             // Check if the directory exists
             if (!is_dir(\config::images_dir)) {
-                if (!mkdir(\config::images_dir, 0755, true)) {
+                if (!mkdir(\config::images_dir, 0700, true)) {
                     throw new \Exception("Failed to create images directory");
                 }
             }
