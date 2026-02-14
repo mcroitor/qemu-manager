@@ -9,20 +9,24 @@ use \mc\util;
 /**
  * QEMU disk image management module.
  *
- * Responsible for:
- * - listing images;
- * - creating images via qemu-img;
- * - showing image information;
- * - checking image integrity.
+ * Provides routes and helpers to list, create, inspect, and check
+ * virtual disk images stored in the configured images directory.
  */
 class image
 {
-    /** Path to the current module directory. */
+    /**
+     * Absolute path to this module directory.
+     */
     public const MODULE_PATH = __DIR__;
-    /** Path to the module templates directory. */
+
+    /**
+     * Absolute path to this module templates directory.
+     */
     public const TEMPLATE_PATH = self::MODULE_PATH . \config::sep . "templates";
 
-    /** qemu-img executable name. */
+    /**
+     * qemu-img binary executable name.
+     */
     private const QEMU_IMG = "qemu-img";
     
     // Error messages constants
@@ -98,11 +102,13 @@ class image
     }
 
     /**
-     * Entry point for image module routing.
+     * Main module route handler.
      *
-     * @route image/manage
-     * @param array $args Route arguments.
-     * @return string Module page HTML content.
+     * Resolves command, executes corresponding method, and wraps output
+     * into the shared module manager template.
+     *
+     * @param array<int, string> $args Route arguments.
+     * @return string Rendered manager page HTML.
      */
     #[route("image/manage")]
     public static function manage(array $args): string
@@ -122,19 +128,18 @@ class image
 
         return template::load(\config::templates_dir . \config::sep . "ui" . \config::sep . "module-manager.tpl.php", template::comment_modifiers)
             ->fill([
-                "module-state" => "<pre><code>" . htmlspecialchars(self::state()) . "</code></pre>",
-                "module-content" => $result,
+            "module-state" => "<pre><code>" . htmlspecialchars(self::state()) . "</code></pre>",
+            "module-content" => $result,
                 "menu-list" => self::generate_menu(self::$menu),
             ])
             ->value();
     }
 
     /**
-     * Returns the list of available images.
+     * Lists available image files.
      *
-     * @route image/list
-     * @param array $args Route arguments (unused).
-     * @return string Images HTML table/list.
+     * @param array<int, string> $args Route arguments (unused).
+     * @return string Rendered image list HTML.
      */
     #[route("image/list")]
     public static function list(array $args): string
@@ -173,6 +178,14 @@ class image
             ->value();
     }
 
+    /**
+     * Renders image creation form or handles image creation POST request.
+     *
+     * Validates input, creates image via qemu-img, and returns a status block.
+     *
+     * @param array<int, string> $args Route arguments (unused).
+     * @return string Rendered form or operation result HTML.
+     */
     // #[route("image/create")]
     /**
      * Creates a new disk image via qemu-img.
@@ -199,7 +212,7 @@ class image
                 ->value();
         }
 
-        // Improved input validation
+        // Enhanced input validation
         $validator = \mc\Validator::fromPost();
         
         // Validate image name
@@ -209,29 +222,30 @@ class image
                  ->filename('image-name', 'Invalid characters in image name')
                  ->pattern('image-name', '/^[a-zA-Z0-9_-]+$/', 'Image name can only contain letters, numbers, hyphens and underscores')
                  ->custom('image-name', function($value) {
-                     // Check if the file with the same name already exists
+                     // Check that file with this name does not exist
+                     $filename = $value . '.img';
                      $images = self::list_images();
                      return !in_array($value, $images);
                  }, 'Image with this name already exists');
 
-        // Validate image size
+            // Validate image size
         $validator->required('image-size', 'Image size is required')
                  ->integer('image-size', 'Image size must be a number')
                  ->range('image-size', 1, 1048576, 'Image size must be between 1MB and 1TB'); // 1MB to 1TB
 
-        // Validate image format
+            // Validate image format
         $allowedFormats = ['qcow2', 'raw', 'vmdk', 'vdi', 'vhdx'];
         $validator->required('image-format', 'Image format is required')
                  ->in('image-format', $allowedFormats, 'Invalid image format. Allowed: ' . implode(', ', $allowedFormats));
 
-        // Check validation results
+            // Check validation results
         if ($validator->hasErrors()) {
             $error_items = "";
             foreach ($validator->getErrors() as $error) {
                 $error_items .= "<li>" . htmlspecialchars($error) . "</li>";
             }
 
-            // Show the form again with previous values and error messages
+            // Re-render form with errors and preserved values
             $selected_format = $validator->get('image-format', 'qcow2');
             $form_html = template::load(self::TEMPLATE_PATH . \config::sep . "image/create.tpl.php", template::comment_modifiers)
                 ->fill([
@@ -253,16 +267,16 @@ class image
                 ->value();
         }
 
-        // Get validated values
+        // Read validated values
         $image_name = $validator->get('image-name');
         $image_size = $validator->get('image-size');
         $image_format = $validator->get('image-format');
 
         try {
-            // Create full path to the file
+            // Build full file path
             $image_path = \config::images_dir . \config::sep . "{$image_name}.img";
             
-            // Check if the directory exists
+            // Ensure target directory exists
             if (!is_dir(\config::images_dir)) {
                 if (!mkdir(\config::images_dir, 0700, true)) {
                     throw new \Exception("Failed to create images directory");
@@ -274,7 +288,7 @@ class image
                 throw new \Exception("Images directory is not writable");
             }
 
-            // Create the image using qemu-img
+            // Build safe shell command
             $command = self::QEMU_IMG . " create -f " . escapeshellarg($image_format) . 
                       " " . escapeshellarg($image_path) . 
                       " " . escapeshellarg($image_size . "M");
@@ -313,11 +327,10 @@ class image
     }
 
     /**
-     * Displays image information.
+     * Shows detailed information for one image.
      *
-     * @route image/info
-     * @param array $args Expects image name in $args[0].
-     * @return string HTML with info or error text.
+     * @param array<int, string> $args Route arguments, expects image file name at index 0.
+     * @return string Formatted image info or validation/error output.
      */
     #[route("image/info")]
     private static function info(array $args): string
@@ -332,7 +345,7 @@ class image
                  ->filename('image_name', self::ERR_NAME_INVALID)
                  ->safePath('image_name', self::ERR_PATH_UNSAFE)
                  ->custom('image_name', function($value) {
-                     // Check that the file exists
+                     // Ensure file exists
                      $images = self::list_images();
                      return in_array($value, $images);
                  }, self::ERR_FILE_NOT_EXIST);
@@ -359,9 +372,9 @@ class image
     }
 
     /**
-     * Returns qemu-img status string (version).
+     * Returns qemu-img version information for module state display.
      *
-     * @return string Version string or error message.
+     * @return string First output line from qemu-img --version or error text.
      */
     private static function state(): string
     {

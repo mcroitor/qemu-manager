@@ -7,8 +7,20 @@ use \mc\template;
 use \mc\util;
 use \qemu\hardware\network;
 
+/**
+ * Network management module for virtual machines.
+ *
+ * Manages network interfaces and port forwarding rules.
+ */
 class NetworkManager {
+    /**
+     * Absolute path to this module directory.
+     */
     public const MODULE_PATH = __DIR__;
+
+    /**
+     * Absolute path to this module templates directory.
+     */
     public const TEMPLATE_PATH = self::MODULE_PATH . \config::sep . "templates";
 
     // Available network types in QEMU
@@ -48,6 +60,12 @@ class NetworkManager {
         return $html;
     }
 
+    /**
+     * Main network module route handler.
+     *
+     * @param array<int, string> $args Route arguments.
+     * @return string Rendered manager page HTML.
+     */
     #[route("network/manage")]
     public static function manage(array $args): string
     {
@@ -84,7 +102,10 @@ class NetworkManager {
     }
 
     /**
-     * Display list of network interfaces
+        * Displays configured network interfaces.
+        *
+        * @param array<int, string> $args Route arguments (unused).
+        * @return string Rendered interfaces list HTML.
      */
     private static function list(array $args): string
     {
@@ -129,12 +150,15 @@ class NetworkManager {
     }
 
     /**
-     * Создание нового сетевого интерфейса
+        * Renders interface creation form or handles create POST request.
+        *
+        * @param array<int, string> $args Route arguments.
+        * @return string Rendered form or operation result HTML.
      */
     private static function create(array $args): string
     {
         if (empty($_POST)) {
-            // Показать форму создания
+            // Render creation form
             $machines = \config::$db->select("virtual_machine", ["name"]);
             $machine_options = "";
             foreach ($machines as $machine) {
@@ -171,12 +195,15 @@ class NetworkManager {
             ]);
         }
 
-        // Обработка POST данных
+        // Process POST payload
         return self::processNetworkForm();
     }
 
     /**
-     * Редактирование сетевого интерфейса
+        * Renders interface edit form or handles edit POST request.
+        *
+        * @param array<int, string> $args Route arguments, expects VM name at index 0.
+        * @return string Rendered form or operation result HTML.
      */
     private static function edit(array $args): string
     {
@@ -187,7 +214,7 @@ class NetworkManager {
         $machine_name = filter_var($args[0], FILTER_SANITIZE_SPECIAL_CHARS);
         
         if (empty($_POST)) {
-            // Показать форму редактирования
+            // Render edit form
             try {
                 $interface = \config::$db->select("network_interface", ["*"], ["machine_name" => $machine_name]);
                 
@@ -237,12 +264,15 @@ class NetworkManager {
             }
         }
 
-        // Обработка POST данных для редактирования
+        // Process POST payload for edit
         return self::processNetworkForm($machine_name);
     }
 
     /**
-     * Удаление сетевого интерфейса
+        * Deletes a network interface.
+        *
+        * @param array<int, string> $args Route arguments, expects VM name at index 0.
+        * @return string Operation result HTML.
      */
     private static function delete(array $args): string
     {
@@ -265,12 +295,15 @@ class NetworkManager {
     }
 
     /**
-     * Управление port forwarding
+        * Renders port forwarding list/form or handles create POST request.
+        *
+        * @param array<int, string> $args Route arguments.
+        * @return string Rendered page HTML.
      */
     private static function portforward(array $args): string
     {
         if (empty($_POST)) {
-            // Показать список и форму для port forwarding
+            // Render rules list and add form for port forwarding
             try {
                 $forwards = \config::$db->select("port_forwarding", ["*"]);
                 
@@ -297,7 +330,7 @@ class NetworkManager {
                     $html .= "</tbody></table><br>";
                 }
 
-                // Форма для добавления нового правила
+                // Form for adding a new rule
                 $machines = \config::$db->select("virtual_machine", ["name"]);
                 $machine_options = "";
                 foreach ($machines as $machine) {
@@ -323,12 +356,15 @@ class NetworkManager {
             }
         }
 
-        // Обработка добавления port forwarding
+        // Process port forwarding creation
         return self::processPortForwardForm();
     }
 
     /**
-     * Обработка формы сетевых настроек
+        * Validates and persists network interface form data.
+        *
+        * @param string $edit_machine Machine name for update mode; empty string for create mode.
+        * @return string Operation result HTML.
      */
     private static function processNetworkForm(string $edit_machine = ""): string
     {
@@ -340,7 +376,7 @@ class NetworkManager {
             $gateway = filter_input(INPUT_POST, "gateway", FILTER_SANITIZE_SPECIAL_CHARS);
             $dns = filter_input(INPUT_POST, "dns", FILTER_SANITIZE_SPECIAL_CHARS);
 
-            // Валидация
+            // Validation
             $errors = [];
             
             if (empty($machine_name)) {
@@ -359,7 +395,7 @@ class NetworkManager {
                 $errors[] = "Invalid gateway IP address format";
             }
 
-            // Проверка уникальности MAC адреса
+            // Check MAC uniqueness
             if (!empty($mac_address)) {
                 $existing_conditions = ["mac" => $mac_address];
                 if (!empty($edit_machine)) {
@@ -381,7 +417,7 @@ class NetworkManager {
                 return $error_html;
             }
 
-            // Сохранение в БД
+            // Persist to database
             $interface_data = [
                 'machine_name' => $machine_name,
                 'mac' => $mac_address,
@@ -392,12 +428,12 @@ class NetworkManager {
             ];
 
             if (!empty($edit_machine)) {
-                // Обновление существующего интерфейса
+                // Update existing interface
                 \config::$db->update("network_interface", $interface_data, ["machine_name" => $edit_machine]);
                 \config::$logger->info("Updated network interface for machine: {$machine_name}");
                 $action = "updated";
             } else {
-                // Создание нового интерфейса
+                // Create new interface
                 \config::$db->insert("network_interface", $interface_data);
                 \config::$logger->info("Created network interface for machine: {$machine_name}");
                 $action = "created";
@@ -416,7 +452,9 @@ class NetworkManager {
     }
 
     /**
-     * Обработка формы port forwarding
+        * Validates and persists port forwarding form data.
+        *
+        * @return string Operation result HTML.
      */
     private static function processPortForwardForm(): string
     {
@@ -427,7 +465,7 @@ class NetworkManager {
             $guest_port = filter_input(INPUT_POST, "guest_port", FILTER_SANITIZE_NUMBER_INT);
             $guest_ip = filter_input(INPUT_POST, "guest_ip", FILTER_SANITIZE_SPECIAL_CHARS);
 
-            // Валидация
+            // Validation
             $errors = [];
             
             if (empty($machine_name)) {
@@ -450,7 +488,7 @@ class NetworkManager {
                 $errors[] = "Invalid guest IP address format";
             }
 
-            // Проверка уникальности правила
+            // Check rule uniqueness
             if (\config::$db->exists("port_forwarding", ["machine_name" => $machine_name, "protocol" => $protocol, "host_port" => $host_port])) {
                 $errors[] = "Port forwarding rule already exists";
             }
@@ -464,7 +502,7 @@ class NetworkManager {
                 return $error_html;
             }
 
-            // Сохранение в БД
+            // Persist to database
             $forward_data = [
                 'machine_name' => $machine_name,
                 'protocol' => $protocol,
@@ -485,28 +523,10 @@ class NetworkManager {
     }
 
     /**
-     * Удаление правила port forwarding
-     */
-    private static function delete_forward(array $args): string
-    {
-        if (empty($args[0])) {
-            return "<div style='color: red;'>Error: Machine name not specified</div>";
-        }
-
-        $machine_name = filter_var($args[0], FILTER_SANITIZE_SPECIAL_CHARS);
-
-        try {
-            \config::$db->delete("port_forwarding", ["machine_name" => $machine_name]);
-            \config::$logger->info("Deleted port forwarding rule for machine: {$machine_name}");
-            return "<div style='color: green;'>Port forwarding rule for '{$machine_name}' deleted successfully. <a href='/?q=network/manage/portforward'>Back to port forwarding</a></div>";
-        } catch (\Exception $e) {
-            \config::$logger->error("Error deleting port forwarding rule: " . $e->getMessage());
-            return "<div style='color: red;'>Error: " . htmlspecialchars($e->getMessage()) . "</div>";
-        }
-    }
-
-    /**
-     * Рендеринг формы сетевых настроек
+        * Renders network interface form HTML.
+        *
+        * @param array<string, string> $data Prepared template/form values.
+        * @return string Rendered HTML form.
      */
     private static function renderNetworkForm(array $data): string
     {
@@ -526,7 +546,9 @@ class NetworkManager {
     }
 
     /**
-     * Получение состояния сети
+     * Returns a short network module state summary.
+     *
+     * @return string Human-readable network state text.
      */
     private static function getNetworkState(): string
     {
@@ -544,7 +566,9 @@ class NetworkManager {
     }
 
     /**
-     * Генерация случайного MAC адреса
+     * Generates a random MAC address using QEMU OUI prefix.
+     *
+     * @return string MAC address in format XX:XX:XX:XX:XX:XX.
      */
     private static function generateRandomMAC(): string
     {
@@ -556,7 +580,10 @@ class NetworkManager {
     }
 
     /**
-     * Валидация MAC адреса
+     * Validates MAC address format.
+     *
+     * @param string $mac MAC address string.
+     * @return bool True if format is valid, otherwise false.
      */
     private static function isValidMAC(string $mac): bool
     {
@@ -564,7 +591,10 @@ class NetworkManager {
     }
 
     /**
-     * Получение сетевых параметров для QEMU команды
+     * Builds QEMU network CLI arguments for a specific VM.
+     *
+     * @param string $machine_name Virtual machine name.
+     * @return string QEMU network arguments string.
      */
     public static function getNetworkArgsForVM(string $machine_name): string
     {
@@ -572,14 +602,14 @@ class NetworkManager {
             $interface = \config::$db->select("network_interface", ["*"], ["machine_name" => $machine_name]);
             
             if (empty($interface)) {
-                // Стандартные сетевые настройки
+                // Default network settings
                 return "-netdev user,id=net0 -device virtio-net-pci,netdev=net0";
             }
 
             $interface = $interface[0];
             $args = "-netdev user,id=net0";
             
-            // Добавить port forwarding если есть
+            // Add port forwarding if present
             $forwards = \config::$db->select("port_forwarding", ["*"], ["machine_name" => $machine_name]);
             foreach ($forwards as $forward) {
                 $args .= ",hostfwd={$forward['protocol']}::{$forward['host_port']}-:{$forward['guest_port']}";

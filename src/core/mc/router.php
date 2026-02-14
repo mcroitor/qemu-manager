@@ -5,8 +5,10 @@ namespace mc;
 use Exception;
 
 /**
- * this router class is based on $_GET
- * <URL> ::= http[s]://<domain>/?<route-name>[/params]
+ * GET-based router with attribute discovery support.
+ *
+ * URL format:
+ * http[s]://<domain>/?<route-name>[/params]
  */
 class router {
 
@@ -18,8 +20,10 @@ class router {
     private static $selectedRoute = "/";
 
     /**
-     * set routes
-     * @param array $routes
+        * Initializes built-in and discovered routes.
+        *
+        * @param array<string, callable> $routes Additional route callbacks.
+        * @return void
      */
     public static function init(array $routes = []): void {
         self::$routes[self::$default] = function (): string {
@@ -33,7 +37,9 @@ class router {
     }
 
     /**
-     * scan classes. select all static methods and check attributes
+     * Scans declared classes for static methods with route attribute.
+     *
+     * @return void
      */
     private static function scan_classes(): void {
         $classes = \get_declared_classes();
@@ -47,7 +53,9 @@ class router {
     }
 
     /**
-     * scan functions. check attributes
+     * Scans user functions for route attribute.
+     *
+     * @return void
      */
     private static function scan_functions(): void {
         $functions = \get_defined_functions();
@@ -58,8 +66,10 @@ class router {
     }
 
     /**
-     * if method or function has `route` attribute, register it
-     * @param \ReflectionFunction $reflection
+     * Registers reflected callable if route attribute is present.
+     *
+     * @param \ReflectionFunctionAbstract $reflection Function or method reflection.
+     * @return void
      */
     private static function register_method($reflection): void {
         $attribute = self::get_method_attribute($reflection, self::ATTRIBUTE_NAME);
@@ -69,6 +79,13 @@ class router {
         }
     }
 
+    /**
+     * Finds a specific attribute on reflected callable.
+     *
+     * @param \ReflectionFunctionAbstract $method Function or method reflection.
+     * @param string $attributeName Fully-qualified attribute class name.
+     * @return \ReflectionAttribute|null Matching attribute or null.
+     */
     private static function get_method_attribute($method, $attributeName) {
         /** @var \ReflectionAttribute $attributes */
         $attributes = $method->getAttributes();
@@ -81,7 +98,10 @@ class router {
     }
 
     /**
-     * load routes from JSON file
+     * Loads routes from a JSON file.
+     *
+     * @param string $jsonfile JSON file path.
+     * @return void
      */
     public static function load(string $jsonfile = "routes.json"): void {
         $routes = json_decode(file_get_contents($jsonfile));
@@ -89,8 +109,11 @@ class router {
     }
 
     /**
-     * register a new route.
-     * If $route_method is null, the $route_name will be
+     * Registers a route callback.
+     *
+     * @param string $route_name Route key.
+     * @param callable $route_method Route callback.
+     * @return void
      */
     public static function register(string $route_name, callable $route_method): void {
         if (is_callable($route_method) === false) {
@@ -100,14 +123,19 @@ class router {
     }
 
     /**
-     * rewrite default param name
+     * Sets GET parameter name used for route lookup.
+     *
+     * @param string $param GET parameter name.
+     * @return void
      */
     public static function set_param(string $param): void {
         self::$param = $param;
     }
 
     /**
-     * entry point for routing!
+     * Resolves current request and executes matching route callback.
+     *
+     * @return string Route handler output.
      */
     public static function run(): string {
         $path = filter_input(INPUT_GET, self::$param, FILTER_DEFAULT, ["default" => self::$default]);
@@ -137,10 +165,10 @@ class router {
     }
 
     /**
-     * get list of routes. if $needle is not empty, return only routes 
-     * that start with $needle
-     * @param string $needle
-     * @return array
+     * Returns registered routes optionally filtered by prefix.
+     *
+     * @param string $needle Route prefix filter.
+     * @return array<int, string> List of route keys.
      */
     public static function get_routes(string $needle = ""): array {
         $routes = [];
@@ -153,8 +181,9 @@ class router {
     }
 
     /**
-     * get current route
-     * @return string
+     * Returns selected route for the current request.
+     *
+     * @return string Selected route key.
      */
     public static function get_selected_route(): string {
         return self::$selectedRoute;
