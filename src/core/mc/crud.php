@@ -96,7 +96,6 @@ class Crud
         }
 
         $key = $data[$this->key];
-        echo "[debug] key found " . $key . PHP_EOL;
         $result = $this->select($key);
         /// object not found, insert object
         if (empty($result)) {

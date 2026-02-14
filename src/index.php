@@ -13,11 +13,26 @@ $routes = [];
 
 $page = new page();
 
-$page->menu([
-    "?q=image/manage" => "Images",
-    "?q=machine/manage" => "Virtual Machines",
-    "?q=network/manage" => "Network Settings",
-]);
+$menu = [];
+
+if (\auth::needsBootstrapAdmin()) {
+    $menu["?q=auth/bootstrap-admin"] = "Bootstrap Admin";
+}
+
+if (\auth::isAuthenticated()) {
+    $username = htmlspecialchars((string)\auth::currentUsername());
+
+    $menu["?q=image/manage"] = "Images";
+    $menu["?q=machine/manage"] = "Virtual Machines";
+    $menu["?q=network/manage"] = "Network Settings";
+
+    $menu["?q=auth/logout"] = "Logout ({$username})";
+} else {
+    $menu["?q=auth/login"] = "Login";
+    $menu["?q=auth/register"] = "Register";
+}
+
+$page->menu($menu);
 
 $page->content(\mc\router::run());
 
