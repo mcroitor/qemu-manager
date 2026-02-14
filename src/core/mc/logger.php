@@ -3,9 +3,7 @@
 namespace mc;
 
 /**
- * Description of log
- *
- * @author Croitor Mihail <mcroitor@gmail.com>
+ * Lightweight logger with level markers and optional formatter.
  */
 class logger {
 
@@ -30,32 +28,40 @@ class logger {
     private $debug = false;
 
     /**
-     * @param string $logfile
+     * Creates logger instance.
+     *
+     * @param string $logfile Output stream or file path.
      */
     public function __construct(string $logfile = "php://stdout") {
         $this->logfile = $logfile;
     }
 
     /**
-     * set a output pretifier function
-     * @param callable $pretifier
+     * Sets output formatter callback.
+     *
+     * @param callable $pretifier Formatter callback.
+     * @return void
      */
     public function setPretifier(callable $pretifier) {
         $this->pretifier = $pretifier;
     }
 
     /**
-     * enable / disable debug logging
-     * @param bool $enable
+     * Enables or disables debug logging.
+     *
+     * @param bool $enable True to enable debug messages.
+     * @return void
      */
     public function enableDebug(bool $enable = true){
         $this->debug = $enable;
     }
 
     /**
-     * write a message with specific log type marker
-     * @param string $data
-     * @param string $logType
+     * Writes a log line with timestamp and level marker.
+     *
+     * @param string $data Log message.
+     * @param string $logType Log level constant.
+     * @return void
      */
     private function write(string $data,string  $logType) {
         if (isset($_SESSION["timezone"])) {
@@ -70,49 +76,61 @@ class logger {
     }
 
     /**
-     * info message
-     * @param string $data
+     * Writes INFO message.
+     *
+     * @param string $data Log message.
+     * @return void
      */
     public function info(string $data) {
         $this->write($data, self::INFO);
     }
 
     /**
-     * warn message
-     * @param string $data
+     * Writes WARN message.
+     *
+     * @param string $data Log message.
+     * @return void
      */
     public function warn(string $data) {
         $this->write($data, self::WARN);
     }
 
     /**
-     * pass message
-     * @param string $data
+     * Writes PASS message.
+     *
+     * @param string $data Log message.
+     * @return void
      */
     public function pass(string $data) {
         $this->write($data, self::PASS);
     }
 
     /**
-     * error message
-     * @param string $data
+     * Writes ERROR message.
+     *
+     * @param string $data Log message.
+     * @return void
      */
     public function error(string $data) {
         $this->write($data, self::ERROR);
     }
 
     /**
-     * fail message
-     * @param string $data
+     * Writes FAIL message.
+     *
+     * @param string $data Log message.
+     * @return void
      */
     public function fail(string $data) {
         $this->write($data, self::FAIL);
     }
 
     /**
-     * debug message
-     * @param string $data
-     * @param bool $debug
+     * Writes DEBUG message when debug mode is enabled.
+     *
+     * @param string $data Log message.
+     * @param bool $debug Force debug output for this call.
+     * @return void
      */
     public function debug(string $data, bool $debug = false) {
         if($this->debug || $debug) {
@@ -121,16 +139,18 @@ class logger {
     }
 
     /**
-     * stdout logger builder
-     * @return \mc\logger
+     * Creates stdout logger.
+     *
+     * @return \mc\logger Logger instance.
      */
     public static function stdout(){
         return new logger();
     }
 
     /**
-     * stderr logger builder
-     * @return \mc\logger
+     * Creates stderr logger.
+     *
+     * @return \mc\logger Logger instance.
      */
     public static function stderr(){
         return new logger("php://stderr");

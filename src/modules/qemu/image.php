@@ -6,11 +6,27 @@ use \mc\route;
 use \mc\template;
 use \mc\util;
 
+/**
+ * QEMU disk image management module.
+ *
+ * Provides routes and helpers to list, create, inspect, and check
+ * virtual disk images stored in the configured images directory.
+ */
 class image
 {
+    /**
+     * Absolute path to this module directory.
+     */
     public const MODULE_PATH = __DIR__;
+
+    /**
+     * Absolute path to this module templates directory.
+     */
     public const TEMPLATE_PATH = self::MODULE_PATH . \config::sep . "templates";
 
+    /**
+     * qemu-img binary executable name.
+     */
     private const QEMU_IMG = "qemu-img";
     
     // Error messages constants
@@ -56,6 +72,12 @@ class image
         "create" => "Create Image",
     ];
 
+    /**
+     * Builds HTML navigation items for module actions.
+     *
+     * @param array<string, string> $menu Menu map (route suffix => label).
+     * @return string Rendered HTML menu items.
+     */
     private static function generate_menu(array $menu): string
     {
         $html = "";
@@ -70,11 +92,20 @@ class image
         return $html;
     }
 
+    /**
+     * Main module route handler.
+     *
+     * Resolves command, executes corresponding method, and wraps output
+     * into the shared module manager template.
+     *
+     * @param array<int, string> $args Route arguments.
+     * @return string Rendered manager page HTML.
+     */
     #[route("image/manage")]
     public static function manage(array $args): string
     {
         $command = "list";
-        if (!empty($args) && in_array($args[0], self::COMMAND)) {
+        if (!empty($args) && in_array($args[0], self::COMMAND, true)) {
             $command = $args[0];
         }
 
@@ -86,19 +117,26 @@ class image
             $result = self::$command($args);
         }
 
-        return template::load(util::sausage("image.manager", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+        return template::load(\config::templates_dir . \config::sep . "ui" . \config::sep . "module-manager.tpl.php", template::comment_modifiers)
             ->fill([
-                "image-state" => "<pre><code>" . self::state() . "</code></pre>",
-                "image-content" => $result,
+            "module-state" => "<pre><code>" . htmlspecialchars(self::state()) . "</code></pre>",
+            "module-content" => $result,
                 "menu-list" => self::generate_menu(self::$menu),
             ])
             ->value();
     }
 
+    /**
+     * Lists available image files.
+     *
+     * @param array<int, string> $args Route arguments (unused).
+     * @return string Rendered image list HTML.
+     */
     #[route("image/list")]
     public static function list(array $args): string
     {
         $files = self::list_images();
+        $images = [];
 
         foreach ($files as $file) {
             $images[] = [
@@ -113,9 +151,11 @@ class image
         }
         $html = "";
         foreach ($images as $image) {
+            $safe_name = htmlspecialchars($image["name"]);
+            $link_name = rawurlencode($image["name"]);
             $html .= template::load(self::TEMPLATE_PATH . \config::sep . "image/list-item.tpl.php", template::comment_modifiers)
                 ->fill([
-                    "image-name" => "<a href='/?q=image/manage/info/{$image["name"]}'>{$image["name"]}</a>",
+                    "image-name" => "<a href='/?q=image/manage/info/{$link_name}'>{$safe_name}</a>",
                     "image-size" => util::size_bytes_to_readable($image["size"]),
                     "image-type" => $image["type"],
                 ])
@@ -129,6 +169,14 @@ class image
             ->value();
     }
 
+    /**
+     * Renders image creation form or handles image creation POST request.
+     *
+     * Validates input, creates image via qemu-img, and returns a status block.
+     *
+     * @param array<int, string> $args Route arguments (unused).
+     * @return string Rendered form or operation result HTML.
+     */
     // #[route("image/create")]
     public static function create(array $args): string
     {
@@ -146,34 +194,33 @@ class image
                 ->value();
         }
 
-        // Улучшенная валидация входных данных
+        // Enhanced input validation
         $validator = \mc\Validator::fromPost();
         
-        // Валидация имени образа
+        // Validate image name
         $validator->required('image-name', 'Image name is required')
                  ->minLength('image-name', 1, 'Image name cannot be empty')
                  ->maxLength('image-name', 100, 'Image name is too long (max 100 characters)')
                  ->filename('image-name', 'Invalid characters in image name')
                  ->pattern('image-name', '/^[a-zA-Z0-9_-]+$/', 'Image name can only contain letters, numbers, hyphens and underscores')
-                 ->custom('image-name', function($value) use ($validator) {
-                     // Проверяем, что файл с таким именем и расширением не существует
-                     $format = $validator->get('image-format', 'qcow2');
-                     $filename = $value . '.' . $format;
+                 ->custom('image-name', function($value) {
+                     // Check that file with this name does not exist
+                     $filename = $value . '.img';
                      $images = self::list_images();
                      return !in_array($filename, $images);
                  }, 'Image with this name already exists');
 
-        // Валидация размера образа
+            // Validate image size
         $validator->required('image-size', 'Image size is required')
                  ->integer('image-size', 'Image size must be a number')
                  ->range('image-size', 1, 1048576, 'Image size must be between 1MB and 1TB'); // 1MB to 1TB
 
-        // Валидация формата образа
+            // Validate image format
         $allowedFormats = ['qcow2', 'raw', 'vmdk', 'vdi', 'vhdx'];
         $validator->required('image-format', 'Image format is required')
                  ->in('image-format', $allowedFormats, 'Invalid image format. Allowed: ' . implode(', ', $allowedFormats));
 
-        // Проверяем результаты валидации
+            // Check validation results
         if ($validator->hasErrors()) {
             $error_html = "<div style='color: red; background: #ffe6e6; padding: 10px; border: 1px solid #ff0000; margin-bottom: 10px;'>";
             $error_html .= "<h4>Please correct the following errors:</h4><ul>";
@@ -182,7 +229,7 @@ class image
             }
             $error_html .= "</ul></div>";
 
-            // Показать форму с ошибками и сохраненными значениями
+            // Re-render form with errors and preserved values
             $selected_format = $validator->get('image-format', 'qcow2');
             return $error_html . template::load(self::TEMPLATE_PATH . \config::sep . "image/create.tpl.php", template::comment_modifiers)
                 ->fill([
@@ -197,28 +244,28 @@ class image
                 ->value();
         }
 
-        // Получаем валидированные данные
+        // Read validated values
         $image_name = $validator->get('image-name');
         $image_size = $validator->get('image-size');
         $image_format = $validator->get('image-format');
 
         try {
-            // Создаем полный путь к файлу
+            // Build full file path
             $image_path = \config::images_dir . \config::sep . "{$image_name}.img";
             
-            // Проверяем, что директория существует
+            // Ensure target directory exists
             if (!is_dir(\config::images_dir)) {
                 if (!mkdir(\config::images_dir, 0700, true)) {
                     throw new \Exception("Failed to create images directory");
                 }
             }
 
-            // Проверяем права на запись
+            // Ensure directory is writable
             if (!is_writable(\config::images_dir)) {
                 throw new \Exception("Images directory is not writable");
             }
 
-            // Строим безопасную команду
+            // Build safe shell command
             $command = self::QEMU_IMG . " create -f " . escapeshellarg($image_format) . 
                       " " . escapeshellarg($image_path) . 
                       " " . escapeshellarg($image_size . "M");
@@ -226,24 +273,24 @@ class image
             \config::$logger->info("Creating image with command: {$command}");
             $output = util::execute_command($command);
             
-            // Проверяем успешность создания
+            // Verify creation success
             if (file_exists($image_path)) {
                 $fileSize = filesize($image_path);
                 \config::$logger->info("Created image '{$image_name}.img' successfully, size: " . util::size_bytes_to_readable($fileSize));
                 
                 return "<div style='color: green; background: #e6ffe6; padding: 15px; border: 1px solid #00ff00; margin-bottom: 10px;'>" .
                        "<h3>✓ Success!</h3>" .
-                       "<p>Disk image '<strong>{$image_name}.img</strong>' created successfully!</p>" .
+                      "<p>Disk image '<strong>" . htmlspecialchars($image_name) . ".img</strong>' created successfully!</p>" .
                        "<p><strong>Details:</strong></p>" .
                        "<ul>" .
-                       "<li>Format: {$image_format}</li>" .
-                       "<li>Size: {$image_size} MB</li>" .
+                      "<li>Format: " . htmlspecialchars($image_format) . "</li>" .
+                      "<li>Size: " . htmlspecialchars((string)$image_size) . " MB</li>" .
                        "<li>File size: " . util::size_bytes_to_readable($fileSize) . "</li>" .
                        "<li>Location: " . htmlspecialchars($image_path) . "</li>" .
                        "</ul>" .
                        "<p>" .
                        "<a href='/?q=image/manage/list' class='button'>View all images</a> " .
-                       "<a href='/?q=image/manage/info/{$image_name}.img' class='button'>Image info</a> " .
+                      "<a href='/?q=image/manage/info/" . rawurlencode($image_name . '.img') . "' class='button'>Image info</a> " .
                        "<a href='/?q=machine/manage/create' class='button button-primary'>Create VM with this image</a>" .
                        "</p>" .
                        "</div>";
@@ -261,6 +308,12 @@ class image
         }
     }
 
+    /**
+     * Shows detailed information for one image.
+     *
+     * @param array<int, string> $args Route arguments, expects image file name at index 0.
+     * @return string Formatted image info or validation/error output.
+     */
     #[route("image/info")]
     private static function info(array $args): string
     {
@@ -268,13 +321,13 @@ class image
             return util::code_to_html("Error: " . self::ERR_NAME_NOT_SPECIFIED);
         }
 
-        // Валидация имени образа
+        // Validate image name
         $validator = new \mc\Validator(['image_name' => $args[0]]);
         $validator->required('image_name', self::ERR_NAME_NOT_SPECIFIED)
                  ->filename('image_name', self::ERR_NAME_INVALID)
                  ->safePath('image_name', self::ERR_PATH_UNSAFE)
                  ->custom('image_name', function($value) {
-                     // Проверяем, что файл существует
+                     // Ensure file exists
                      $images = self::list_images();
                      return in_array($value, $images);
                  }, self::ERR_FILE_NOT_EXIST);
@@ -300,6 +353,11 @@ class image
         }
     }
 
+    /**
+     * Returns qemu-img version information for module state display.
+     *
+     * @return string First output line from qemu-img --version or error text.
+     */
     private static function state(): string
     {
         $command = self::QEMU_IMG . " --version";
@@ -311,19 +369,25 @@ class image
         return $result[0] ?? "unknown error";
     }
 
+    /**
+     * Validates and runs integrity check for an image.
+     *
+     * @param array<int, string> $args Route arguments, expects image file name at index 0.
+     * @return string Formatted check result or validation/error output.
+     */
     private static function check(array $args): string
     {
         if (empty($args)) {
             return util::code_to_html("Error: " . self::ERR_NAME_NOT_SPECIFIED);
         }
 
-        // Валидация имени образа
+        // Validate image name
         $validator = new \mc\Validator(['image_name' => $args[0]]);
         $validator->required('image_name', self::ERR_NAME_NOT_SPECIFIED)
                  ->filename('image_name', self::ERR_NAME_INVALID)
                  ->safePath('image_name', self::ERR_PATH_UNSAFE)
                  ->custom('image_name', function($value) {
-                     // Проверяем, что файл существует
+                     // Ensure file exists
                      $images = self::list_images();
                      return in_array($value, $images);
                  }, self::ERR_FILE_NOT_EXIST);
@@ -343,9 +407,15 @@ class image
         }
     }
 
+    /**
+     * Executes qemu-img check for a specific image.
+     *
+     * @param string $image_name Image file name.
+     * @return string Raw check output joined by new lines or error message.
+     */
     public static function do_check(string $image_name): string
     {
-        // Валидация имени образа
+        // Validate image name
         $validator = new \mc\Validator(['image_name' => $image_name]);
         $validator->required('image_name', self::ERR_NAME_NOT_SPECIFIED)
                  ->filename('image_name', self::ERR_NAME_INVALID)
@@ -358,7 +428,7 @@ class image
         try {
             $image_path = \config::images_dir . \config::sep . $image_name;
             
-            // Проверяем, что файл существует
+            // Ensure file exists
             if (!file_exists($image_path)) {
                 return "Error: Image file does not exist: {$image_name}";
             }
@@ -379,9 +449,15 @@ class image
         }
     }
 
+    /**
+     * Returns qemu-img info output for a specific image.
+     *
+     * @param string $image_name Image file name.
+     * @return array<int, string> Command output lines or error lines.
+     */
     public static function get_info(string $image_name): array
     {
-        // Валидация имени образа
+        // Validate image name
         $validator = new \mc\Validator(['image_name' => $image_name]);
         $validator->required('image_name', self::ERR_NAME_NOT_SPECIFIED)
                  ->filename('image_name', self::ERR_NAME_INVALID)
@@ -395,7 +471,7 @@ class image
         try {
             $image_path = \config::images_dir . \config::sep . $image_name;
             
-            // Проверяем, что файл существует
+            // Ensure file exists
             if (!file_exists($image_path)) {
                 return ["Error: Image file does not exist: {$image_name}"];
             }
@@ -412,9 +488,20 @@ class image
         }
     }
 
+    /**
+     * Scans images directory and returns image file names.
+     *
+     * Only files with `.img` extension are included.
+     *
+     * @return array<int, string> List of image file names.
+     */
     public static function list_images(): array
     {
         $path = \config::images_dir;
+
+        if (!is_dir($path)) {
+            return [];
+        }
 
         $files = scandir($path);
         $images = [];

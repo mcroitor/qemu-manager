@@ -3,9 +3,7 @@
 namespace mc;
 
 /**
- * simple template filler
- *
- * @author Croitor Mihail <mcroitor@gmail.com>
+ * Simple string-based template filler.
  */
 class template
 {
@@ -32,9 +30,10 @@ class template
     ];
 
     /**
+     * Creates template instance from raw template string.
      *
-     * @param string $template
-     * @param array $modifiers
+     * @param string $template Template content.
+     * @param array<string, string> $modifiers Placeholder delimiters.
      */
     public function __construct(string $template, array $modifiers = [])
     {
@@ -48,10 +47,11 @@ class template
     }
 
     /**
-     * Create new template object from file
-     * @param string $file
-     * @param array $modifiers
-     * @return \mc\template
+     * Creates template object from a file.
+     *
+     * @param string $file Template file path.
+     * @param array<string, string> $modifiers Placeholder delimiters.
+     * @return \mc\template Template instance.
      */
     public static function load(string $file, array $modifiers = []): template
     {
@@ -59,8 +59,10 @@ class template
     }
 
     /**
-     * set filler prefix
-     * @param string $prefix
+     * Sets placeholder prefix.
+     *
+     * @param string $prefix Prefix marker.
+     * @return void
      */
     public function set_prefix(string $prefix)
     {
@@ -68,8 +70,10 @@ class template
     }
 
     /**
-     * set filler suffix
-     * @param string $suffix
+     * Sets placeholder suffix.
+     *
+     * @param string $suffix Suffix marker.
+     * @return void
      */
     public function set_suffix(string $suffix)
     {
@@ -77,13 +81,10 @@ class template
     }
 
     /**
-     * $data is a simple list of pairs <i>$pattern</i> => <i>$value</i>
-     * Method replace <i>$pattern</i> with <i>$value</i>
-     * and return new template object
-     * Example:
-     * <pre>$template->fill($data1)->fill(data2)->value();</pre>
-     * @param array $data
-     * @return \mc\template
+     * Replaces placeholders with values and returns new template instance.
+     *
+     * @param array<string, string> $data Placeholder-value map.
+     * @return \mc\template New template instance.
      */
     public function fill(array $data): template
     {
@@ -96,10 +97,11 @@ class template
     }
 
     /**
-     * Replace single $pattern with $value
-     * @param string $pattern
-     * @param string $value
-     * @return \mc\template
+     * Replaces one pattern with one value.
+     *
+     * @param string $pattern Search pattern.
+     * @param string $value Replacement value.
+     * @return \mc\template New template instance.
      */
     public function fill_value(string $pattern, string $value): template
     {
@@ -107,8 +109,9 @@ class template
     }
 
     /**
-     * returns template value
-     * @return string
+     * Returns current template content.
+     *
+     * @return string Template content.
      */
     public function value(): string
     {

@@ -3,7 +3,7 @@
 namespace mc;
 
 /**
- * Класс для валидации входных данных
+ * Input data validation helper.
  */
 class Validator
 {
@@ -17,7 +17,7 @@ class Validator
     }
 
     /**
-     * Получить все ошибки валидации
+        * Returns all validation errors.
      */
     public function getErrors(): array
     {
@@ -25,7 +25,7 @@ class Validator
     }
 
     /**
-     * Проверить, есть ли ошибки
+        * Checks whether validation has any errors.
      */
     public function hasErrors(): bool
     {
@@ -33,7 +33,7 @@ class Validator
     }
 
     /**
-     * Проверить, валидны ли данные (нет ошибок)
+        * Checks whether validation passed (no errors).
      */
     public function isValid(): bool
     {
@@ -41,7 +41,7 @@ class Validator
     }
 
     /**
-     * Получить первую ошибку
+        * Returns first validation error.
      */
     public function getFirstError(): string
     {
@@ -49,7 +49,7 @@ class Validator
     }
 
     /**
-     * Добавить ошибку
+        * Adds validation error for field.
      */
     private function addError(string $field, string $message): void
     {
@@ -57,7 +57,7 @@ class Validator
     }
 
     /**
-     * Валидация обязательного поля
+        * Validates required field.
      */
     public function required(string $field, string $message = "Field is required"): self
     {
@@ -68,7 +68,7 @@ class Validator
     }
 
     /**
-     * Валидация минимальной длины строки
+        * Validates minimum string length.
      */
     public function minLength(string $field, int $minLength, ?string $message = null): self
     {
@@ -83,7 +83,7 @@ class Validator
     }
 
     /**
-     * Валидация максимальной длины строки
+        * Validates maximum string length.
      */
     public function maxLength(string $field, int $maxLength, ?string $message = null): self
     {
@@ -98,7 +98,7 @@ class Validator
     }
 
     /**
-     * Валидация регулярного выражения
+        * Validates field against regular expression.
      */
     public function pattern(string $field, string $pattern, string $message = "Invalid format"): self
     {
@@ -112,7 +112,7 @@ class Validator
     }
 
     /**
-     * Валидация числового значения
+        * Validates numeric value.
      */
     public function numeric(string $field, string $message = "Must be a number"): self
     {
@@ -125,7 +125,7 @@ class Validator
     }
 
     /**
-     * Валидация целого числа
+        * Validates integer value.
      */
     public function integer(string $field, string $message = "Must be an integer"): self
     {
@@ -138,7 +138,7 @@ class Validator
     }
 
     /**
-     * Валидация диапазона чисел
+        * Validates numeric range.
      */
     public function range(string $field, int $min, int $max, ?string $message = null): self
     {
@@ -153,7 +153,7 @@ class Validator
     }
 
     /**
-     * Валидация email
+        * Validates email address.
      */
     public function email(string $field): self
     {
@@ -166,7 +166,7 @@ class Validator
     }
 
     /**
-     * Валидация IP адреса
+        * Validates IP address.
      */
     public function ip(string $field): self
     {
@@ -179,7 +179,7 @@ class Validator
     }
 
     /**
-     * Валидация MAC адреса
+        * Validates MAC address.
      */
     public function mac(string $field): self
     {
@@ -193,7 +193,7 @@ class Validator
     }
 
     /**
-     * Валидация URL
+        * Validates URL.
      */
     public function url(string $field): self
     {
@@ -206,7 +206,7 @@ class Validator
     }
 
     /**
-     * Валидация значения из списка
+        * Validates that value is in allowed list.
      */
     public function in(string $field, array $allowedValues, ?string $message = null): self
     {
@@ -224,18 +224,18 @@ class Validator
     }
 
     /**
-     * Валидация имени файла
+     * Validates file name.
      */
     public function filename(string $field, string $message = "Invalid filename"): self
     {
         if (isset($this->data[$field])) {
             $value = (string)$this->data[$field];
-            // Проверяем на недопустимые символы в имени файла
+            // Check for invalid file name characters
             if (preg_match('/[<>:"|?*\\\\\/]/', $value)) {
                 $this->addError($field, $message);
                 return $this;
             }
-            // Проверяем на зарезервированные имена Windows
+            // Check Windows reserved names
             $reserved = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
             if (in_array(strtoupper($value), $reserved)) {
                 $this->addError($field, "Reserved filename");
@@ -245,7 +245,7 @@ class Validator
     }
 
     /**
-     * Валидация размера файла (в байтах)
+        * Validates file size in bytes.
      */
     public function fileSize(string $field, int $maxSize): self
     {
@@ -259,13 +259,13 @@ class Validator
     }
 
     /**
-     * Валидация пути к файлу (защита от directory traversal)
+     * Validates file path to prevent directory traversal.
      */
     public function safePath(string $field, string $message = "Invalid file path"): self
     {
         if (isset($this->data[$field])) {
             $value = (string)$this->data[$field];
-            // Проверяем на попытки выхода из директории
+            // Check directory escape attempts
             if (
                 str_starts_with($value, './') ||
                 str_starts_with($value, '.\\') ||
@@ -277,7 +277,7 @@ class Validator
                 $this->addError($field, $message);
                 return $this;
             }
-            // Проверяем на абсолютные пути
+            // Check absolute paths
             if (strpos($value, '/') === 0 || preg_match('/^[a-zA-Z]:/', $value)) {
                 $this->addError($field, "Relative paths only");
             }
@@ -286,7 +286,7 @@ class Validator
     }
 
     /**
-     * Валидация имени машины/контейнера (только буквы, цифры, тире, подчеркивания)
+        * Validates machine/container name (letters, numbers, hyphens, underscores).
      */
     public function machineName(string $field, string $message = "Invalid machine name. Use only letters, numbers, hyphens and underscores"): self
     {
@@ -300,14 +300,14 @@ class Validator
     }
 
     /**
-     * Валидация уникальности в базе данных
+     * Validates uniqueness in database.
      */
     public function unique(string $field, string $table, string $column, ?string $message = null, array $exclude = []): self
     {
         if (isset($this->data[$field])) {
             $conditions = [$column => $this->data[$field]];
             
-            // Добавляем исключения для UPDATE операций
+            // Add exclusions for UPDATE operations
             foreach ($exclude as $excludeField => $excludeValue) {
                 $conditions[] = "{$excludeField} != '{$excludeValue}'";
             }
@@ -321,7 +321,7 @@ class Validator
     }
 
     /**
-     * Валидация существования в базе данных
+        * Validates existence in database.
      */
     public function exists(string $field, string $table, string $column, ?string $message = null): self
     {
@@ -337,7 +337,7 @@ class Validator
     }
 
     /**
-     * Пользовательская валидация
+        * Runs custom validation callback.
      */
     public function custom(string $field, callable $callback, string $message = "Validation failed"): self
     {
@@ -350,7 +350,7 @@ class Validator
     }
 
     /**
-     * Статический метод для создания валидатора из POST данных
+        * Creates validator from POST data.
      */
     public static function fromPost(): self
     {
@@ -362,7 +362,7 @@ class Validator
     }
 
     /**
-     * Статический метод для создания валидатора из GET данных
+        * Creates validator from GET data.
      */
     public static function fromGet(): self
     {
@@ -374,7 +374,7 @@ class Validator
     }
 
     /**
-     * Получить очищенные данные
+        * Returns sanitized data.
      */
     public function getData(): array
     {
@@ -382,7 +382,7 @@ class Validator
     }
 
     /**
-     * Получить значение поля
+        * Returns field value.
      */
     public function get(string $field, $default = null)
     {

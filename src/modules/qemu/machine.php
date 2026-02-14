@@ -10,8 +10,20 @@ use \mc\util;
 use \qemu\hardware;
 use qemu\hardware\architecture;
 
+/**
+ * Virtual machine management module.
+ *
+ * Handles VM lifecycle actions, listing, and creation.
+ */
 class machine {
+    /**
+     * Absolute path to this module directory.
+     */
     public const MODULE_PATH = __DIR__;
+
+    /**
+     * Absolute path to this module templates directory.
+     */
     public const TEMPLATE_PATH = self::MODULE_PATH . \config::sep . "templates";
 
     private const QEMU_SYSTEM = "qemu-system-";
@@ -35,6 +47,12 @@ class machine {
         "create" => "Create VM",
     ];
 
+    /**
+     * Builds HTML navigation items for machine actions.
+     *
+     * @param array<string, string> $menu Menu map (route suffix => label).
+     * @return string Rendered HTML menu items.
+     */
     private static function generate_menu(array $menu): string
     {
         $html = "";
@@ -50,9 +68,10 @@ class machine {
     }
 
     /**
-     * Start virtual machine
-     * @param array $args
-     * @return string
+        * Starts a virtual machine.
+        *
+        * @param array<int, string> $args Route arguments, expects VM name at index 0.
+        * @return string Operation result HTML.
      */
     private static function start(array $args): string
     {
@@ -139,7 +158,10 @@ class machine {
     }
 
     /**
-     * Stop virtual machine
+        * Stops a virtual machine.
+        *
+        * @param array<int, string> $args Route arguments, expects VM name at index 0.
+        * @return string Operation result HTML.
      */
     private static function stop(array $args): string
     {
@@ -182,7 +204,10 @@ class machine {
     }
 
     /**
-     * Delete virtual machine and all related data (network settings, port forwarding)
+        * Deletes a virtual machine and related network data.
+        *
+        * @param array<int, string> $args Route arguments, expects VM name at index 0.
+        * @return string Operation result HTML.
      */
     private static function delete(array $args): string
     {
@@ -231,6 +256,12 @@ class machine {
         }
     }
 
+    /**
+     * Main machine module route handler.
+     *
+     * @param array<int, string> $args Route arguments.
+     * @return string Rendered manager page HTML.
+     */
     #[route("machine/manage")]
     public static function manage(array $args): string
     {
@@ -255,11 +286,22 @@ class machine {
             ->value();
     }
 
+    /**
+     * Returns machine module state text.
+     *
+     * @return string State information.
+     */
     private static function state(): string
     {
         return "state";
     }
 
+    /**
+     * Lists configured virtual machines.
+     *
+     * @param array<int, string> $args Route arguments (unused).
+     * @return string Rendered VM list HTML.
+     */
     private static function list(array $args): string
     {
         try {
@@ -309,9 +351,15 @@ class machine {
         }
     }
 
+    /**
+     * Renders VM creation form or handles VM creation POST request.
+     *
+     * @param array<int, string> $args Route arguments (unused).
+     * @return string Rendered form or operation result HTML.
+     */
     public static function create(array $args): string{
         if(empty($_POST)){
-            // Показать форму создания ВМ
+            // Render VM creation form
             $images = image::list_images();
             \config::$logger->info("Images: " . json_encode($images));
             $list_images = "";
@@ -327,8 +375,8 @@ class machine {
                 ])
                 ->value();
         }
-        
-        // Обработать POST данные для создания ВМ
+            // Process POST payload for VM creation
+        // Process POST payload for VM creation
         try {
             // Enhanced validation using centralized Validator
             $validator = new \mc\Validator($_POST);
@@ -444,7 +492,9 @@ class machine {
     }
 
     /**
-     * Генерация случайного MAC адреса для QEMU
+        * Generates a random MAC address using QEMU OUI prefix.
+        *
+        * @return string MAC address in format XX:XX:XX:XX:XX:XX.
      */
     private static function generateRandomMAC(): string
     {
