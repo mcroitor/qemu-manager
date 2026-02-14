@@ -81,6 +81,22 @@ class image
         self::INFO,
     ];
 
+    private const REQUIRED_ROLE = \auth::ROLE_OPERATOR;
+
+    /**
+     * Returns access denied HTML or null when user is authorized.
+     *
+     * @return string|null Access denied HTML when unauthorized, otherwise null.
+     */
+    private static function ensureAccess(): ?string
+    {
+        if (\auth::requireRole(self::REQUIRED_ROLE)) {
+            return null;
+        }
+
+        return \auth::renderAccessDenied('Images');
+    }
+
     /**
      * Builds module HTML menu.
      *
@@ -113,6 +129,11 @@ class image
     #[route("image/manage")]
     public static function manage(array $args): string
     {
+        $accessDenied = self::ensureAccess();
+        if ($accessDenied !== null) {
+            return $accessDenied;
+        }
+
         $command = self::SYSTEM_LIST;
         if (!empty($args) && in_array($args[0], self::ALLOWED_COMMANDS, true)) {
             $command = $args[0];
@@ -144,6 +165,11 @@ class image
     #[route("image/list")]
     public static function list(array $args): string
     {
+        $accessDenied = self::ensureAccess();
+        if ($accessDenied !== null) {
+            return $accessDenied;
+        }
+
         $files = self::list_images();
         $images = [];
 
@@ -335,6 +361,11 @@ class image
     #[route("image/info")]
     private static function info(array $args): string
     {
+        $accessDenied = self::ensureAccess();
+        if ($accessDenied !== null) {
+            return $accessDenied;
+        }
+
         if (empty($args)) {
             return util::code_to_html("Error: " . self::ERR_NAME_NOT_SPECIFIED);
         }

@@ -55,6 +55,8 @@ class machine {
         'delete',
     ];
 
+    private const REQUIRED_ROLE = \auth::ROLE_OPERATOR;
+
     private static function generate_menu(array $menu): string
     {
         $html = "";
@@ -275,12 +277,8 @@ class machine {
     #[route("machine/manage")]
     public static function manage(array $args): string
     {
-        if (!\auth::requireRole(\user::ROLE_OPERATOR)) {
-            return "<div style='color: red; background: #ffe6e6; padding: 15px; border: 1px solid #ff0000; margin-bottom: 10px;'>" .
-                   "<h3>Access denied</h3>" .
-                   "<p>You must be authenticated as operator or admin to access Virtual Machines.</p>" .
-                   "<p><a href='/?q=auth/login' class='button button-primary'>Login</a></p>" .
-                   "</div>";
+        if (!\auth::requireRole(self::REQUIRED_ROLE)) {
+            return \auth::renderAccessDenied('Virtual Machines');
         }
 
         $command = "list";

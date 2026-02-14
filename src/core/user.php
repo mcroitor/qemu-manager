@@ -1,11 +1,22 @@
 <?php
 
+/**
+ * User domain service.
+ *
+ * Provides schema bootstrap, user CRUD-related operations,
+ * role checks, credential verification, and audit logging.
+ */
 class user
 {
+	/** @var string Users table name. */
 	private const TABLE = "users";
+	/** @var bool Schema initialization guard. */
 	private static bool $schemaReady = false;
+	/** @var string Administrator role. */
 	public const ROLE_ADMIN = "admin";
+	/** @var string Operator role. */
 	public const ROLE_OPERATOR = "operator";
+	/** @var string Viewer role. */
 	public const ROLE_VIEWER = "viewer";
 
 	private const ROLE_PRIORITY = [
@@ -14,6 +25,14 @@ class user
 		self::ROLE_ADMIN => 30,
 	];
 
+	/**
+	 * Writes user-related audit entry to logger.
+	 *
+	 * @param string $action Audit action key.
+	 * @param array $context Additional structured context.
+	 * @param string $level Log level (`info`, `warn`, `error`).
+	 * @return void
+	 */
 	private static function audit(string $action, array $context = [], string $level = 'info'): void
 	{
 		if (!isset(\config::$logger) || \config::$logger === null) {
@@ -39,11 +58,21 @@ class user
 		\config::$logger->info($message);
 	}
 
+	/**
+	 * Returns current timestamp in application format.
+	 *
+	 * @return string Timestamp string.
+	 */
 	private static function now(): string
 	{
 		return date('Y-m-d H:i:s');
 	}
 
+	/**
+	 * Ensures `users` table exists.
+	 *
+	 * @return void
+	 */
 	public static function ensureSchema(): void
 	{
 		if (self::$schemaReady) {
@@ -69,12 +98,23 @@ class user
 		self::$schemaReady = true;
 	}
 
+	/**
+	 * Removes sensitive fields from user row.
+	 *
+	 * @param array $row Raw database row.
+	 * @return array Sanitized user row.
+	 */
 	private static function sanitize(array $row): array
 	{
 		unset($row['password_hash']);
 		return $row;
 	}
 
+	/**
+	 * Returns supported role identifiers.
+	 *
+	 * @return array<int, string> Role list.
+	 */
 	public static function roles(): array
 	{
 		return [
@@ -84,6 +124,12 @@ class user
 		];
 	}
 
+	/**
+	 * Finds user by numeric identifier.
+	 *
+	 * @param int $id User ID.
+	 * @return array|null Sanitized user data or null.
+	 */
 	public static function findById(int $id): ?array
 	{
 		self::ensureSchema();
@@ -94,6 +140,12 @@ class user
 		return self::sanitize($rows[0]);
 	}
 
+	/**
+	 * Finds user by username.
+	 *
+	 * @param string $username Username.
+	 * @return array|null Sanitized user data or null.
+	 */
 	public static function findByUsername(string $username): ?array
 	{
 		self::ensureSchema();
@@ -104,6 +156,12 @@ class user
 		return self::sanitize($rows[0]);
 	}
 
+	/**
+	 * Creates a new user account.
+	 *
+	 * @param array $data User payload (`username`, `email`, `password`, optional `role`).
+	 * @return string|false New user ID on success, otherwise false.
+	 */
 	public static function create(array $data): string|false
 	{
 		self::ensureSchema();
@@ -152,6 +210,13 @@ class user
 		return $id;
 	}
 
+	/**
+	 * Verifies login credentials for active user.
+	 *
+	 * @param string $username Username.
+	 * @param string $password Plain password.
+	 * @return array|null Sanitized user data on success, otherwise null.
+	 */
 	public static function verifyCredentials(string $username, string $password): ?array
 	{
 		self::ensureSchema();
@@ -171,6 +236,13 @@ class user
 		return self::sanitize($user);
 	}
 
+	/**
+	 * Updates user profile fields.
+	 *
+	 * @param int $id User ID.
+	 * @param array $data Allowed fields: `email`, `role`, `is_active`.
+	 * @return bool True on success, false on validation or persistence failure.
+	 */
 	public static function updateProfile(int $id, array $data): bool
 	{
 		self::ensureSchema();
@@ -217,6 +289,14 @@ class user
 		return true;
 	}
 
+	/**
+	 * Changes user password after old password verification.
+	 *
+	 * @param int $id User ID.
+	 * @param string $oldPassword Current password.
+	 * @param string $newPassword New password.
+	 * @return bool True on success, otherwise false.
+	 */
 	public static function changePassword(int $id, string $oldPassword, string $newPassword): bool
 	{
 		self::ensureSchema();
@@ -248,6 +328,12 @@ class user
 		return true;
 	}
 
+	/**
+	 * Updates last-login timestamp for user.
+	 *
+	 * @param int $id User ID.
+	 * @return void
+	 */
 	public static function touchLastLogin(int $id): void
 	{
 		self::ensureSchema();
@@ -257,6 +343,11 @@ class user
 		], ['id' => $id]);
 	}
 
+	/**
+	 * Returns total user count.
+	 *
+	 * @return int Number of users.
+	 */
 	public static function countUsers(): int
 	{
 		self::ensureSchema();
@@ -267,12 +358,24 @@ class user
 		return (int)$rows[0]['count'];
 	}
 
+	/**
+	 * Checks whether at least one active admin exists.
+	 *
+	 * @return bool True when active admin exists.
+	 */
 	public static function hasAnyAdmin(): bool
 	{
 		self::ensureSchema();
 		return \config::$db->exists(self::TABLE, ["role" => self::ROLE_ADMIN, "is_active" => 1]);
 	}
 
+	/**
+	 * Compares user role against required role using priority table.
+	 *
+	 * @param array $user User data containing `role`.
+	 * @param string $requiredRole Required role.
+	 * @return bool True when user role satisfies required role.
+	 */
 	public static function hasRole(array $user, string $requiredRole): bool
 	{
 		$actual = $user['role'] ?? self::ROLE_VIEWER;
