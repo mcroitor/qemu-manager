@@ -47,12 +47,14 @@ class machine {
         "create" => "Create VM",
     ];
 
-    /**
-     * Builds HTML navigation items for machine actions.
-     *
-     * @param array<string, string> $menu Menu map (route suffix => label).
-     * @return string Rendered HTML menu items.
-     */
+    private const ALLOWED_COMMANDS = [
+        'list',
+        'create',
+        'start',
+        'stop',
+        'delete',
+    ];
+
     private static function generate_menu(array $menu): string
     {
         $html = "";
@@ -194,6 +196,10 @@ class machine {
             \config::$logger->info("Stopping VM '{$machine_name}' with command: {$command}");
             
             $output = util::execute_command($command);
+
+            if (!empty($output) && isset($output[0]) && strpos($output[0], 'error') !== false) {
+                return "<div style='color: red;'>Error stopping VM: " . htmlspecialchars(implode("\n", $output)) . "</div>";
+            }
             
             return "<div style='color: green;'>" . self::MSG_VM_STOPPED . ": '{$machine_name}'</div>";
             
@@ -230,9 +236,13 @@ class machine {
             $machine_name = $validator->get('machine_name');
 
             // Remove from database (with cascading delete of related data)
-            $deleted_rows = \config::$db->delete("virtual_machine", ["name" => $machine_name]);
-            
-            if ($deleted_rows > 0) {
+            if (!\config::$db->exists("virtual_machine", ["name" => $machine_name])) {
+                return "<div style='color: red;'>Error: " . self::ERR_VM_NOT_FOUND . "</div>";
+            }
+
+            \config::$db->delete("virtual_machine", ["name" => $machine_name]);
+
+            if (!\config::$db->exists("virtual_machine", ["name" => $machine_name])) {
                 // Remove related network interfaces
                 \config::$db->delete("network_interface", ["machine_name" => $machine_name]);
 
@@ -265,10 +275,22 @@ class machine {
     #[route("machine/manage")]
     public static function manage(array $args): string
     {
+        if (!\auth::requireRole(\user::ROLE_OPERATOR)) {
+            return "<div style='color: red; background: #ffe6e6; padding: 15px; border: 1px solid #ff0000; margin-bottom: 10px;'>" .
+                   "<h3>Access denied</h3>" .
+                   "<p>You must be authenticated as operator or admin to access Virtual Machines.</p>" .
+                   "<p><a href='/?q=auth/login' class='button button-primary'>Login</a></p>" .
+                   "</div>";
+        }
+
         $command = "list";
         if (count($args) > 0) {
             $command = $args[0];
             array_shift($args);
+        }
+
+        if (!in_array($command, self::ALLOWED_COMMANDS, true)) {
+            $command = 'list';
         }
 
         // populate result
@@ -277,10 +299,10 @@ class machine {
             $result = self::$command($args);
         }
             
-        return template::load(util::sausage("machine.manager", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+        return template::load(\config::templates_dir . \config::sep . "ui" . \config::sep . "module-manager.tpl.php", template::comment_modifiers)
             ->fill([
-                "machine-state" => self::state(),
-                "machine-content" => $result,
+                "module-state" => self::state(),
+                "module-content" => $result,
                 "menu-list" => self::generate_menu(self::$menu),
                 ])
             ->value();
@@ -308,14 +330,11 @@ class machine {
             $machines = \config::$db->select("virtual_machine", ["*"]);
             
             if (empty($machines)) {
-                return "<h3>No virtual machines found</h3><p><a href='/?q=machine/manage/create'>Create your first virtual machine</a></p>";
+                return template::load(util::sausage("machine.list-empty", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                    ->value();
             }
 
-            $html = "<h3>Virtual Machines</h3>";
-            $html .= "<table class='u-full-width data'>";
-            $html .= "<thead><tr>";
-            $html .= "<th>Name</th><th>Platform</th><th>CPU</th><th>Memory (MB)</th><th>Primary Disk</th><th>Network</th><th>Actions</th>";
-            $html .= "</tr></thead><tbody>";
+            $rows = "";
 
             foreach ($machines as $machine) {
                 // Get network info
@@ -323,31 +342,35 @@ class machine {
                 $network_display = "No network";
                 if (!empty($network_info)) {
                     $net = $network_info[0];
-                    $network_display = $net['mac'] . "<br><small>" . ($net['ip'] ?? 'DHCP') . "</small>";
+                    $network_display = htmlspecialchars($net['mac']) . "<br><small>" . htmlspecialchars($net['ip'] ?? 'DHCP') . "</small>";
                 }
-                
-                $html .= "<tr>";
-                $html .= "<td>" . htmlspecialchars($machine['name']) . "</td>";
-                $html .= "<td>" . htmlspecialchars($machine['platform']) . "</td>";
-                $html .= "<td>" . htmlspecialchars($machine['cpu']) . "</td>";
-                $html .= "<td>" . htmlspecialchars($machine['memory']) . "</td>";
-                $html .= "<td>" . htmlspecialchars($machine['hda'] ?? 'None') . "</td>";
-                $html .= "<td>" . $network_display . "</td>";
-                $html .= "<td>";
-                $html .= "<a href='/?q=machine/manage/start/" . urlencode($machine['name']) . "' class='button w120px'>Start</a> ";
-                $html .= "<a href='/?q=machine/manage/stop/" . urlencode($machine['name']) . "' class='button w120px'>Stop</a> ";
-                $html .= "<a href='/?q=network/manage/edit/" . urlencode($machine['name']) . "' class='button w120px'>Network</a> ";
-                $html .= "<a href='/?q=machine/manage/delete/" . urlencode($machine['name']) . "' class='button w120px' onclick='return confirm(\"Are you sure?\")'>Delete</a>";
-                $html .= "</td>";
-                $html .= "</tr>";
+
+                $rows .= template::load(util::sausage("machine.list-row", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                    ->fill([
+                        "machine-name" => htmlspecialchars($machine['name']),
+                        "machine-platform" => htmlspecialchars($machine['platform']),
+                        "machine-cpu" => htmlspecialchars((string)$machine['cpu']),
+                        "machine-memory" => htmlspecialchars((string)$machine['memory']),
+                        "machine-disk" => htmlspecialchars($machine['hda'] ?? 'None'),
+                        "machine-network" => $network_display,
+                        "machine-name-url" => urlencode($machine['name']),
+                    ])
+                    ->value();
             }
 
-            $html .= "</tbody></table>";
-            return $html;
+            return template::load(util::sausage("machine.list", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                ->fill([
+                    "machine-rows" => $rows,
+                ])
+                ->value();
             
         } catch (\Exception $e) {
             \config::$logger->error("Error listing virtual machines: " . $e->getMessage());
-            return "<div style='color: red;'><h3>Error!</h3><p>Failed to load virtual machines: " . htmlspecialchars($e->getMessage()) . "</p></div>";
+            return template::load(util::sausage("machine.list-error", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                ->fill([
+                    "error-message" => htmlspecialchars($e->getMessage()),
+                ])
+                ->value();
         }
     }
 
@@ -364,7 +387,8 @@ class machine {
             \config::$logger->info("Images: " . json_encode($images));
             $list_images = "";
             foreach($images as $image){
-                $list_images .= "<option value='{$image}'>{$image}</option>";
+                $safe_image = htmlspecialchars($image);
+                $list_images .= "<option value='{$safe_image}'>{$safe_image}</option>";
             }
             return template::load(util::sausage("machine.create", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
                 ->fill([
@@ -398,12 +422,10 @@ class machine {
                 }, 'Selected disk image does not exist');
 
             if ($validator->hasErrors()) {
-                $error_html = "<div style='color: red; background: #ffe6e6; padding: 10px; border: 1px solid #ff0000; margin-bottom: 10px;'>";
-                $error_html .= "<h4>Please correct the following errors:</h4><ul>";
+                $error_items = "";
                 foreach ($validator->getErrors() as $error) {
-                    $error_html .= "<li>" . htmlspecialchars($error) . "</li>";
+                    $error_items .= "<li>" . htmlspecialchars($error) . "</li>";
                 }
-                $error_html .= "</ul></div>";
                 
                 // Show form again with errors and previously entered values
                 $images = image::list_images();
@@ -411,15 +433,23 @@ class machine {
                 $machine_image = $validator->get('machine-image', '');
                 foreach($images as $image){
                     $selected = ($image === $machine_image) ? "selected" : "";
-                    $list_images .= "<option value='{$image}' {$selected}>{$image}</option>";
+                    $safe_image = htmlspecialchars($image);
+                    $list_images .= "<option value='{$safe_image}' {$selected}>{$safe_image}</option>";
                 }
-                
-                return $error_html . template::load(util::sausage("machine.create", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+
+                $form_html = template::load(util::sausage("machine.create", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
                     ->fill([
                         "disk-image-list" => $list_images,
                         "machine-name-value" => htmlspecialchars($validator->get('machine-name', '')),
                         "machine-cpu-value" => htmlspecialchars($validator->get('machine-cpu', '1')),
                         "machine-ram-value" => htmlspecialchars($validator->get('machine-ram', '512')),
+                    ])
+                    ->value();
+
+                return template::load(util::sausage("machine.create-validation-error", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                    ->fill([
+                        "error-list" => $error_items,
+                        "create-form" => $form_html,
                     ])
                     ->value();
             }
@@ -460,34 +490,27 @@ class machine {
                 }
                 
                 \config::$logger->info("Created virtual machine: {$machine_name}");
-                return "<div style='color: green; background: #e6ffe6; padding: 15px; border: 1px solid #00ff00; margin-bottom: 10px;'>" .
-                       "<h3>✓ Success!</h3>" .
-                       "<p>Virtual machine '<strong>{$machine_name}</strong>' has been created successfully.</p>" .
-                       "<p><strong>Configuration:</strong></p>" .
-                       "<ul>" .
-                       "<li>CPU cores: {$machine_cpu}</li>" .
-                       "<li>Memory: {$machine_ram} MB</li>" .
-                       "<li>Primary disk: {$machine_image}</li>" .
-                       "<li>Platform: " . self::$platform->name . "</li>" .
-                       "<li>Network: Default interface created</li>" .
-                       "</ul>" .
-                       "<p>" .
-                       "<a href='/?q=machine/manage/list' class='button w120px'>View all machines</a> " .
-                       "<a href='/?q=machine/manage/start/{$machine_name}' class='button button-primary w120px'>Start this machine</a> " .
-                       "<a href='/?q=network/manage/edit/{$machine_name}' class='button w120px'>Configure Network</a>" .
-                       "</p>" .
-                       "</div>";
+                return template::load(util::sausage("machine.create-success", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                    ->fill([
+                        "machine-name" => htmlspecialchars($machine_name),
+                        "machine-cpu" => htmlspecialchars((string)$machine_cpu),
+                        "machine-ram" => htmlspecialchars((string)$machine_ram),
+                        "machine-image" => htmlspecialchars($machine_image),
+                        "machine-platform" => htmlspecialchars(self::$platform->name),
+                        "machine-name-url" => urlencode($machine_name),
+                    ])
+                    ->value();
             } else {
                 throw new \Exception("Failed to save virtual machine to database");
             }
 
         } catch (\Exception $e) {
             \config::$logger->error("Error creating virtual machine: " . $e->getMessage());
-            return "<div style='color: red; background: #ffe6e6; padding: 15px; border: 1px solid #ff0000; margin-bottom: 10px;'>" .
-                   "<h3>✗ Error!</h3>" .
-                   "<p>Failed to create virtual machine: " . htmlspecialchars($e->getMessage()) . "</p>" .
-                   "<p><a href='/?q=machine/manage/create' class='button'>Try again</a></p>" .
-                   "</div>";
+            return template::load(util::sausage("machine.create-failure", "tpl.php", self::TEMPLATE_PATH), template::comment_modifiers)
+                ->fill([
+                    "error-message" => htmlspecialchars($e->getMessage()),
+                ])
+                ->value();
         }
     }
 

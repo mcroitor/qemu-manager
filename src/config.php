@@ -31,6 +31,8 @@ class config {
     private const dsn = "sqlite:" . config::data_dir . config::sep . "database.sqlite";
 
     private const core = [
+        "user",
+        "auth",
         "mc/crud",
         "mc/database",
         "mc/logger",
