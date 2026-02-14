@@ -211,7 +211,7 @@ class image
                  ->custom('image-name', function($value) {
                      // Check if the file with the same name already exists
                      $images = self::list_images();
-                     return !in_array($filename, $images);
+                     return !in_array($value, $images);
                  }, 'Image with this name already exists');
 
         // Validate image size
